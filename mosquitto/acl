@@ -1,0 +1,18 @@
+# La placa solo publica sus datos y lee sus comandos
+user esp32
+topic write jefe/+/telemetry
+topic write jefe/+/status
+topic write jefe/+/state
+topic write jefe/+/info
+topic write jefe/+/snap
+topic write jefe/+/live
+topic read jefe/+/cmd
+
+# El panel ve todo y solo puede mandar comandos
+user panel
+topic read jefe/#
+topic write jefe/+/cmd
+
+# Telegraf / Node-RED
+user backend
+topic readwrite jefe/#

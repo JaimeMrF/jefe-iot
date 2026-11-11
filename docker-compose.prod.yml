@@ -1,0 +1,111 @@
+# Produccion (VPS). Uso:  docker compose -f docker-compose.prod.yml up -d
+# Solo se publican 80 (Caddy, validacion ACME y redireccion) y 443 (nginx, que reparte por SNI a Caddy o Mosquitto).
+# Todo lo demas queda en la red interna.
+name: jefe-iot
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./panel:/srv/panel:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  # Puerta unica del 443: reparte por SNI (mqtt.* -> Mosquitto, resto -> Caddy)
+  edge:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on: [caddy, mosquitto]
+    ports:
+      - "443:443"
+    volumes:
+      - ./deploy/edge.conf:/etc/nginx/nginx.conf:ro
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    restart: unless-stopped
+    user: root            # necesita leer la llave TLS emitida por Caddy (despues baja privilegios)
+    entrypoint: ["/bin/sh", "/config-tpl/entrypoint.sh"]
+    depends_on: [caddy]
+    environment:
+      DOMAIN: ${DOMAIN}
+      MQTT_ESP_PASS: ${MQTT_ESP_PASS}
+      MQTT_PANEL_PASS: ${MQTT_PANEL_PASS}
+      MQTT_BACKEND_PASS: ${MQTT_BACKEND_PASS}
+    volumes:
+      - ./mosquitto:/config-tpl:ro
+      - caddy-data:/caddy:ro
+      - mosquitto-data:/mosquitto/data
+
+  influxdb:
+    image: influxdb:2.7
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USER}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN}
+    volumes:
+      - influx-data:/var/lib/influxdb2
+
+  telegraf:
+    image: telegraf:1.32
+    restart: unless-stopped
+    depends_on: [mosquitto, influxdb]
+    environment:
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      INFLUX_ORG: ${INFLUX_ORG}
+      INFLUX_BUCKET: ${INFLUX_BUCKET}
+      MQTT_USER: backend
+      MQTT_PASS: ${MQTT_BACKEND_PASS}
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+
+  nodered:
+    image: nodered/node-red:latest
+    restart: unless-stopped
+    depends_on: [mosquitto]
+    ports:
+      - "127.0.0.1:1880:1880"   # editor solo por tunel SSH: ssh -L 1880:localhost:1880 usuario@vps
+    environment:
+      TZ: America/Bogota
+      AZURE_MAPS_KEY: ${AZURE_MAPS_KEY}
+      MQTT_USER: backend
+      MQTT_PASS: ${MQTT_BACKEND_PASS}
+    volumes:
+      - nodered-data:/data
+      - ./datasets:/datasets:ro
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    restart: unless-stopped
+    depends_on: [influxdb]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      INFLUX_ORG: ${INFLUX_ORG}
+      INFLUX_BUCKET: ${INFLUX_BUCKET}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+
+volumes:
+  caddy-data:
+  caddy-config:
+  mosquitto-data:
+  influx-data:
+  nodered-data:
+  grafana-data:

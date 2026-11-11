@@ -1,0 +1,1 @@
+{ "mqttHost": "", "mqttPort": 1883, "tls": false }

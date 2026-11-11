@@ -1,0 +1,30 @@
+# El dominio sale de .env (DOMAIN). Cambiar de VPS o de dominio = cambiar DNS y .env, sin tocar codigo.
+# Panel 3D (estatico) + WebSocket MQTT + configuracion para el panel
+{$DOMAIN} {
+	encode gzip
+	header Permissions-Policy "bluetooth=(self)"
+	header Cache-Control "no-cache"
+	header X-Content-Type-Options nosniff
+
+	handle_path /mqtt* {
+		reverse_proxy mosquitto:9001
+	}
+	handle /config.json {
+		header Content-Type application/json
+		respond `{"mqttHost":"mqtt.{$DOMAIN}","mqttPort":443,"tls":true}` 200
+	}
+	handle {
+		root * /srv/panel
+		file_server
+	}
+}
+
+grafana.{$DOMAIN} {
+	encode gzip
+	reverse_proxy grafana:3000
+}
+
+# Solo existe para que Caddy obtenga el certificado que usa Mosquitto (llega por el 443 via SNI)
+mqtt.{$DOMAIN} {
+	respond "mqtt ok" 200
+}

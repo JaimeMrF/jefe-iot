@@ -1,0 +1,75 @@
+name: CI-CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar docker compose (dev y prod)
+        run: |
+          docker compose --env-file .env.example -f docker-compose.yml config -q
+          docker compose --env-file .env.prod.example -f docker-compose.prod.yml config -q
+
+      - name: Validar Caddyfile
+        run: |
+          docker run --rm -e DOMAIN=ejemplo.com \
+            -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 \
+            caddy validate --config /etc/caddy/Caddyfile
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Sintaxis del panel
+        run: |
+          for f in panel/js/*.js; do
+            cp "$f" "/tmp/$(basename "$f" .js).mjs"
+            node --check "/tmp/$(basename "$f" .js).mjs"
+          done
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compilar firmware
+        run: |
+          pip install -q platformio
+          pio run -d firmware
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-esp32cam
+          path: firmware/.pio/build/esp32cam/firmware.bin
+
+  deploy:
+    needs: validate
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Confiar en el host del VPS
+        run: ssh-keyscan -p "${VPS_PORT:-22}" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Copiar archivos al VPS
+        run: |
+          rsync -az --delete \
+            --exclude '.git' --exclude '.github' --exclude '.env' --exclude '.deploy-hash' \
+            --exclude 'firmware/.pio' --exclude 'node_modules' \
+            ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/jefe-iot/"
+
+      - name: Desplegar
+        run: ssh "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" 'bash /opt/jefe-iot/deploy/deploy.sh'

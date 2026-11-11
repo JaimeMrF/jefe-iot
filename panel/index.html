@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jefe IoT</title>
+<link rel="stylesheet" href="styles.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="hud">
+  <header id="top">
+    <div class="brand"><span class="dot"></span>JEFE<b>·</b>IOT</div>
+    <div class="chips">
+      <span class="chip" id="chip-ble"><i></i>BLE</span>
+      <span class="chip" id="chip-wifi"><i></i>WiFi</span>
+      <span class="chip" id="chip-mqtt"><i></i>MQTT</span>
+      <span class="chip" id="chip-cam"><i></i>Cámara</span>
+    </div>
+    <div class="tools">
+      <div class="seg" id="views">
+        <button data-view="overview" class="on">Vista</button>
+        <button data-view="monitor">Monitor</button>
+        <button data-view="boss">Jefe</button>
+      </div>
+      <label class="sel">Calidad
+        <select id="quality">
+          <option value="auto" selected>Auto</option>
+          <option value="0">Ultra</option>
+          <option value="1">Alta</option>
+          <option value="2">Media</option>
+          <option value="3">Eco</option>
+        </select>
+      </label>
+      <span id="fps" class="mono">-- fps</span>
+    </div>
+  </header>
+
+  <nav id="tabs">
+    <button data-tab="left" class="on">Conexión</button>
+    <button data-tab="right">Jefe</button>
+  </nav>
+
+  <aside id="left" class="panel-col">
+    <section class="card" id="mq-login" hidden>
+      <h2>Acceso al servidor</h2>
+      <div id="mq-msg" class="msg info">Entra con el usuario del panel para ver los datos y la cámara.</div>
+      <input id="mq-user" type="text" placeholder="Usuario" autocomplete="username">
+      <input id="mq-pass" type="password" placeholder="Clave" autocomplete="current-password">
+      <button id="mq-go" class="primary">Entrar</button>
+    </section>
+
+    <section class="card">
+      <h2>Conexión de la placa</h2>
+      <div id="support" class="msg err" hidden></div>
+      <div class="row">
+        <button id="btn-ble" class="primary">Conectar por Bluetooth</button>
+        <button id="btn-ble-off" class="ghost" hidden>Desconectar</button>
+      </div>
+      <div id="ble-info" class="hint">Enciende la ESP32-CAM, acércala al PC y pulsa conectar. Aparecerá como <b>JefeCAM</b>.</div>
+
+      <div id="prov" class="stack" hidden>
+        <div class="row between">
+          <label class="lbl">Red WiFi (2.4 GHz)</label>
+          <button id="btn-scan" class="ghost small">Buscar redes</button>
+        </div>
+        <ul id="nets" class="nets" hidden></ul>
+        <input id="ssid" type="text" placeholder="Nombre de la red" autocomplete="off" maxlength="32">
+        <div class="pw">
+          <input id="pass" type="password" placeholder="Clave" autocomplete="off" maxlength="63">
+          <button id="btn-eye" class="ghost small" type="button" aria-label="Mostrar clave">Ver</button>
+        </div>
+        <div class="grid2">
+          <div><label class="lbl">Servidor MQTT (dominio o IP)</label><input id="mqtt" type="text" placeholder="mqtt.tudominio.com" autocomplete="off"></div>
+          <div><label class="lbl">Puerto</label><input id="port" type="number" value="1883" min="1" max="65535"></div>
+        </div>
+        <div class="grid2">
+          <div><label class="lbl">Usuario MQTT de la placa</label><input id="muser" type="text" placeholder="esp32" autocomplete="off"></div>
+          <div><label class="lbl">Clave MQTT de la placa</label><input id="mpass" type="password" placeholder="clave" autocomplete="off"></div>
+        </div>
+        <label class="tog"><input type="checkbox" id="mtls"><span>Cifrar con TLS (obligatorio en el VPS, puerto 443)</span></label>
+        <button id="btn-send" class="primary">Enviar a la placa</button>
+        <div id="prov-msg" class="msg" hidden></div>
+        <details class="adv">
+          <summary>Recuperación y avanzado</summary>
+          <div class="grid2">
+            <button class="ghost small" data-cmd="retry">Reintentar WiFi</button>
+            <button class="ghost small" data-cmd="camera">Reiniciar cámara</button>
+            <button class="ghost small" data-cmd="forget">Olvidar WiFi</button>
+            <button class="ghost small" data-cmd="reboot">Reiniciar placa</button>
+          </div>
+          <button class="danger small" data-cmd="factory" id="btn-factory">Restaurar de fábrica</button>
+        </details>
+      </div>
+
+      <label class="lbl">IP de la cámara en la red (se detecta sola)</label>
+      <div class="row"><input id="ip" type="text" placeholder="192.168.x.x" autocomplete="off"><button id="btn-ip" class="ghost small">Usar</button></div>
+      <div id="diag" class="msg warn" hidden></div>
+    </section>
+  </aside>
+
+  <aside id="right" class="panel-col">
+    <section class="card boss-card">
+      <h2>El Jefe</h2>
+      <div class="row between"><div id="boss-state" class="big">SIN DATOS</div><div id="score-num" class="mono big">0</div></div>
+      <div class="bar"><div id="score-bar"></div></div>
+      <div id="boss-say" class="say">Conecta mi ojo para vigilarte.</div>
+    </section>
+
+    <section class="card">
+      <h2>Telemetría</h2>
+      <div class="metrics">
+        <div><span>Movimiento</span><b id="m-motion" class="mono">--</b></div>
+        <div><span>Brillo</span><b id="m-bright" class="mono">--</b></div>
+        <div><span>Señal</span><b id="m-rssi" class="mono">--</b></div>
+        <div><span>Memoria</span><b id="m-heap" class="mono">--</b></div>
+        <div><span>Chip</span><b id="m-temp" class="mono">--</b></div>
+        <div><span>Encendida</span><b id="m-up" class="mono">--</b></div>
+      </div>
+      <canvas id="spark" width="300" height="56"></canvas>
+    </section>
+
+    <section class="card">
+      <h2>Control remoto</h2>
+      <label class="tog"><input type="checkbox" id="c-flash"><span>Flash LED</span></label>
+      <label class="tog"><input type="checkbox" id="c-enabled" checked><span>Detección de movimiento</span></label>
+      <label class="rng">Sensibilidad <output id="o-gain">4.0</output><input type="range" id="c-gain" min="0.5" max="12" step="0.5" value="4"></label>
+      <label class="rng">Intervalo de envío <output id="o-int">10 s</output><input type="range" id="c-int" min="1" max="60" step="1" value="10"></label>
+      <label class="rng">Calidad JPEG (menor = mejor) <output id="o-q">12</output><input type="range" id="c-q" min="10" max="40" step="1" value="12"></label>
+      <label class="rng">Cuadros por segundo del panel <output id="o-fps">6</output><input type="range" id="c-fps" min="1" max="15" step="1" value="6"></label>
+      <div class="row"><button class="ghost small" id="btn-reboot">Reiniciar placa</button></div>
+    </section>
+  </aside>
+
+  <footer id="log" class="mono"></footer>
+</div>
+
+<script src="vendor/mqtt.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

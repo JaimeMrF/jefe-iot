@@ -1,0 +1,6 @@
+.env
+.env.ci
+.deploy-hash
+firmware/.pio/
+node_modules/
+*.log
