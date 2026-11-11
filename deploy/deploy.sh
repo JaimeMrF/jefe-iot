@@ -7,7 +7,7 @@ set -a; . ./.env; set +a
 C="docker compose -f docker-compose.prod.yml"
 
 $C pull --quiet
-$C up -d --remove-orphans
+$C up -d --build --remove-orphans
 
 # Los archivos montados no recrean contenedores: recargar/reiniciar solo si cambiaron
 NEW=$(cat mosquitto/* telegraf/* 2>/dev/null | sha256sum | cut -d' ' -f1)

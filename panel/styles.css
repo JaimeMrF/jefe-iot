@@ -82,3 +82,11 @@ button.danger { background: #2a0d16; border-color: #6b2030; color: #ff8aa0; }
   .tools .sel { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .chip.wait i { animation: none; } #score-bar { transition: none; } }
+
+.devs { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; scrollbar-width: thin; }
+.dev { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; padding: 6px 8px; background: #0a1120; border: 1px solid var(--line); border-radius: 8px; }
+.dev .nm { font-size: 13px; } .dev .nm small { color: var(--dim); display: block; font-size: 11px; }
+.dev .ex { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--dim); }
+.dev .ex input[type=number] { width: 72px; padding: 3px 6px; }
+.dev .ex button { padding: 3px 8px; font-size: 12px; }
+.dev input[type=checkbox] { accent-color: var(--acc); width: 18px; height: 18px; }

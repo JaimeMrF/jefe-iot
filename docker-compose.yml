@@ -39,17 +39,16 @@ services:
     volumes:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
 
-  nodered:
-    image: nodered/node-red:latest
+  bridge:
+    build: ./bridge
     restart: unless-stopped
     depends_on: [mosquitto]
-    ports:
-      - "1880:1880"
     environment:
-      TZ: America/Bogota
+      MQTT_URL: mqtt://mosquitto:1883
+      MQTT_USER: ""
+      MQTT_PASS: ""
       AZURE_MAPS_KEY: ${AZURE_MAPS_KEY}
     volumes:
-      - nodered-data:/data
       - ./datasets:/datasets:ro
 
   grafana:
@@ -91,5 +90,4 @@ services:
 volumes:
   mosquitto-data:
   influx-data:
-  nodered-data:
   grafana-data:

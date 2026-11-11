@@ -58,8 +58,7 @@ ssh deploy@VPS "cat /opt/jefe-iot/.env"
 - Grafana: `https://grafana.tudominio.com` → `GRAFANA_USER` / `GRAFANA_PASSWORD`.
 - Placa: usuario **esp32**, clave `MQTT_ESP_PASS`, servidor `mqtt.tudominio.com`, puerto **443**, TLS activado
   (el panel ya trae esos valores por defecto; solo pegas usuario y clave en el formulario Bluetooth).
-- Node-RED e InfluxDB no son públicos: `ssh -L 1880:localhost:1880 -L 8086:localhost:8086 deploy@VPS`
-  y abre `http://localhost:1880`.
+- InfluxDB no es público: `ssh -L 8086:localhost:8086 deploy@VPS` y abre `http://localhost:8086`.
 
 ## 6. Cambios típicos
 | Quiero... | Hago... |
@@ -70,7 +69,7 @@ ssh deploy@VPS "cat /opt/jefe-iot/.env"
 | Actualizar el firmware | Descargar el artefacto del pipeline o compilar con `pio run -t upload` |
 
 ## Seguridad en breve
-- Solo salen a internet 80 (Caddy) y 443 (nginx reparte por SNI: web a Caddy, MQTT con TLS a Mosquitto). InfluxDB y Node-RED quedan en `127.0.0.1`.
+- Solo salen a internet 80 (Caddy) y 443 (nginx reparte por SNI: web a Caddy, MQTT con TLS a Mosquitto). InfluxDB queda en `127.0.0.1`.
 - MQTT sin acceso anónimo. ACL: la placa solo publica sus datos y lee comandos; el panel lee todo y solo manda comandos.
 - La cámara solo se transmite mientras un panel autenticado la pide, y viaja cifrada.
 - Los secretos viven únicamente en el `.env` del servidor y en los secretos de GitHub; nunca en el repositorio.

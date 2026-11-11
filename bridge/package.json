@@ -1,0 +1,9 @@
+{
+  "name": "jefe-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gemelos digitales, APIs, datasets, logica del jefe y alertas para Jefe IoT",
+  "main": "src/index.js",
+  "scripts": { "start": "node src/index.js", "test": "node test.js" },
+  "dependencies": { "mqtt": "5.10.1" }
+}

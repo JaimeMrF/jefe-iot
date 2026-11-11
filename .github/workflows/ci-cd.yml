@@ -30,6 +30,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Pruebas del bridge (modelos, datasets, jefe y reglas)
+        run: |
+          cd bridge
+          npm ci
+          npm test
       - name: Sintaxis del panel
         run: |
           for f in panel/js/*.js; do
@@ -40,6 +45,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: El dashboard de Grafana esta al dia con su generador
+        run: |
+          python tools/gen_dashboard.py
+          git diff --exit-code grafana/provisioning/dashboards/jefe.json
       - name: Compilar firmware
         run: |
           pip install -q platformio

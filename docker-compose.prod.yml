@@ -71,19 +71,17 @@ services:
     volumes:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
 
-  nodered:
-    image: nodered/node-red:latest
+  # Gemelos digitales, APIs, datasets, logica del jefe y alertas (ver bridge/)
+  bridge:
+    build: ./bridge
     restart: unless-stopped
     depends_on: [mosquitto]
-    ports:
-      - "127.0.0.1:1880:1880"   # editor solo por tunel SSH: ssh -L 1880:localhost:1880 usuario@vps
     environment:
-      TZ: America/Bogota
-      AZURE_MAPS_KEY: ${AZURE_MAPS_KEY}
+      MQTT_URL: mqtt://mosquitto:1883
       MQTT_USER: backend
       MQTT_PASS: ${MQTT_BACKEND_PASS}
+      AZURE_MAPS_KEY: ${AZURE_MAPS_KEY}
     volumes:
-      - nodered-data:/data
       - ./datasets:/datasets:ro
 
   grafana:
@@ -107,5 +105,4 @@ volumes:
   caddy-config:
   mosquitto-data:
   influx-data:
-  nodered-data:
   grafana-data:

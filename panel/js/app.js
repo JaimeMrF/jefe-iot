@@ -210,13 +210,16 @@ function startMqtt() {
   const user = store.get('muser'), pass = store.get('mpass');
   if (!IS_LOCAL && !user) { showLogin(); return; }
   client = mqtt.connect(mqttUrl(), { username: user || undefined, password: pass || undefined, clientId: 'panel-' + Math.random().toString(16).slice(2, 8), reconnectPeriod: 2000, connectTimeout: 5000 });
-  client.on('connect', () => { S.mqttUp = true; log('Servidor MQTT conectado'); client.subscribe([`jefe/${DEVICE}/#`]); requestStream(); refreshChips(); });
+  client.on('connect', () => { S.mqttUp = true; log('Servidor MQTT conectado'); client.subscribe([`jefe/${DEVICE}/#`, 'jefe/+/state', 'jefe/bridge/mode']); requestStream(); refreshChips(); });
   client.on('close', () => { if (S.mqttUp) log('Servidor MQTT desconectado, reintentando...', 'w'); S.mqttUp = false; refreshChips(); });
   client.on('error', (err) => {
     if (/Bad user|Not authorized|identifier/i.test(err.message)) { client.end(true); S.mqttUp = false; store.set('mpass', ''); showLogin('Usuario o clave incorrectos.'); log('MQTT: credenciales rechazadas', 'e'); }
   });
   client.on('message', (topic, buf) => {
-    const t = topic.split('/')[2];
+    const [, id, t] = topic.split('/');
+    if (id === 'bridge' && t === 'mode') { S.bridgeMode = buf.toString(); return; }
+    if (t === 'state' && id !== DEVICE) { try { onDevState(id, JSON.parse(buf.toString())); } catch { /* estado invalido */ } return; }
+    if (id !== DEVICE) return;
     if (t === 'snap') return onSnap(buf);
     let j; try { j = JSON.parse(buf.toString()); } catch { j = buf.toString(); }
     if (t === 'telemetry') onTelemetry(j);
@@ -275,6 +278,38 @@ bindRange('c-int', 'o-int', (v) => `${v} s`, 'interval_ms', (v) => v * 1000);
 bindRange('c-q', 'o-q', (v) => v, 'quality');
 $('c-fps').oninput = (e) => { S.camFps = +e.target.value; $('o-fps').textContent = e.target.value; };
 $('btn-reboot').onclick = async () => { if (client?.connected) pub({ reboot: true }); else if (ble.state === 'connected') await ble.command('reboot'); else log('Sin MQTT ni Bluetooth para reiniciar', 'e'); };
+
+// ---------- Dispositivos del servidor (gemelos, APIs, datasets): retroceso ----------
+const DEV_NAMES = {
+  'cam-sala-twin': ['Camara virtual de la sala', 'Digital Twin'], 'termostato-twin': ['Termostato', 'Digital Twin'], 'enchufe-twin': ['Enchufe inteligente', 'Digital Twin'],
+  'puerta-twin': ['Puerta, ventana y PIR', 'Digital Twin'], 'luz-twin': ['Luz inteligente', 'Digital Twin'],
+  'api-azure-weather': ['Azure Maps Weather', 'API'], 'api-openmeteo-aq': ['Calidad del aire (Open-Meteo)', 'API'],
+  'ds-energia': ['Consumo del hogar', 'Dataset'], 'ds-co2': ['CO2 interior', 'Dataset'], 'ds-ocupacion': ['Ocupacion', 'Dataset']
+};
+const DEVS = {};
+const sendDev = (id, obj) => { if (client?.connected) { client.publish(`jefe/${id}/cmd`, JSON.stringify(obj)); log(`Comando a ${id}: ${JSON.stringify(obj)}`); } else log('Sin conexion al servidor: comando no enviado', 'e'); };
+function mk(tag, props = {}, ...kids) { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; }
+function onDevState(id, st) { if (!DEV_NAMES[id]) return; DEVS[id] = st; renderDevs(); }
+function renderDevs() {
+  const box = $('devs'); box.replaceChildren();
+  for (const id of Object.keys(DEV_NAMES)) {
+    const st = DEVS[id]; if (!st) continue;
+    const [name, kind] = DEV_NAMES[id];
+    const tg = mk('input', { type: 'checkbox', checked: !!st.enabled, title: 'Encender / apagar' }); tg.onchange = () => sendDev(id, { enabled: tg.checked });
+    const ex = mk('div', { className: 'ex' });
+    const num = (label, key, min, max, step, send) => { const i = mk('input', { type: 'number', value: st[key], min, max, step }); i.onchange = () => sendDev(id, send(+i.value)); ex.append(label, i); };
+    const btn = (label, obj) => { const b = mk('button', { textContent: label }); b.onclick = () => sendDev(id, obj); ex.append(b); };
+    num('cada (s)', 'interval_s', kind === 'API' ? 60 : 1, 3600, 1, (v) => ({ interval_s: v }));
+    if (id === 'termostato-twin') num('setpoint C', 'setpoint', 10, 30, 0.5, (v) => ({ setpoint: v }));
+    if (id === 'enchufe-twin') { btn(st.relay ? 'Apagar rele' : 'Encender rele', { relay: !st.relay }); }
+    if (id === 'luz-twin') { btn('Encender', { on: true }); btn('Apagar', { on: false }); btn('Auto', { mode: 'auto' }); }
+    if (id === 'puerta-twin') { btn('Abrir puerta', { door: true }); btn('Cerrar', { door: false }); }
+    if (id === 'cam-sala-twin') num('ganancia', 'gain', 0.5, 12, 0.5, (v) => ({ gain: v }));
+    if (kind === 'Dataset') btn('Reiniciar', { rewind: true });
+    box.append(mk('div', { className: 'dev' }, mk('div', { className: 'nm' }, name, mk('small', { textContent: `${kind} · ${id}` })), tg, ex));
+  }
+  if (!box.children.length) box.append(mk('span', { className: 'hint', textContent: 'Esperando al servidor...' }));
+}
 
 // ---------- Imagen de la camara (solo LAN, nunca sale a internet) ----------
 const img = new Image(); img.crossOrigin = 'anonymous';

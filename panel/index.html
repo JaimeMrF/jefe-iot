@@ -123,7 +123,12 @@
     </section>
 
     <section class="card">
-      <h2>Control remoto</h2>
+      <h2>Dispositivos (retroceso)</h2>
+      <div id="devs" class="devs"><span class="hint">Esperando al servidor...</span></div>
+    </section>
+
+    <section class="card">
+      <h2>Control remoto de la ESP32-CAM</h2>
       <label class="tog"><input type="checkbox" id="c-flash"><span>Flash LED</span></label>
       <label class="tog"><input type="checkbox" id="c-enabled" checked><span>Detección de movimiento</span></label>
       <label class="rng">Sensibilidad <output id="o-gain">4.0</output><input type="range" id="c-gain" min="0.5" max="12" step="0.5" value="4"></label>
