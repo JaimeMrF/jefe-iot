@@ -90,3 +90,5 @@ button.danger { background: #2a0d16; border-color: #6b2030; color: #ff8aa0; }
 .dev .ex input[type=number] { width: 72px; padding: 3px 6px; }
 .dev .ex button { padding: 3px 8px; font-size: 12px; }
 .dev input[type=checkbox] { accent-color: var(--acc); width: 18px; height: 18px; }
+.btnlink { background: linear-gradient(180deg, #14b878, #0e8f5d); border: 1px solid #19ffa0; color: #02140c; font-weight: 700; border-radius: 8px; padding: 6px 12px; text-decoration: none; font-size: 13px; }
+.btnlink:hover { filter: brightness(1.1); }

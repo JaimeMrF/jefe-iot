@@ -383,6 +383,9 @@ function pushSpark(v) {
   sx.stroke();
 }
 
+// ---------- Enlace a Grafana (dashboard con todas las graficas) ----------
+$('lnk-graf').href = IS_LOCAL ? `http://${location.hostname}:3000/d/jefe-iot` : `${location.protocol}//grafana.${location.host}/d/jefe-iot`;
+
 // ---------- Arranque ----------
 startMqtt();
 refreshChips();
