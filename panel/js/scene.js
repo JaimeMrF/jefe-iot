@@ -180,6 +180,32 @@ export function createScene(canvas) {
   }
   boss.add(ring);
 
+  // ---------- Efectos del jefe: Zzz (ausente) y confeti (logros) ----------
+  const zzz = [0, 1, 2].map(() => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+    const x = cv.getContext('2d'); x.fillStyle = '#9db8ff'; x.font = 'bold 54px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('Z', 32, 34);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, toneMapped: false }));
+    sp.visible = false; boss.add(sp); return sp;
+  });
+  const CN = 160, cPos = new Float32Array(CN * 3), cVel = new Float32Array(CN * 3), cCol = new Float32Array(CN * 3);
+  const confGeo = new THREE.BufferGeometry();
+  confGeo.setAttribute('position', new THREE.BufferAttribute(cPos, 3));
+  confGeo.setAttribute('color', new THREE.BufferAttribute(cCol, 3));
+  const confetti = new THREE.Points(confGeo, new THREE.PointsMaterial({ size: 0.09, vertexColors: true, transparent: true, depthWrite: false, toneMapped: false }));
+  confetti.visible = false; confetti.frustumCulled = false; scene.add(confetti);
+  let confLife = 0;
+  function burst() {
+    const col = new THREE.Color();
+    for (let i = 0; i < CN; i++) {
+      cPos[i * 3] = boss.position.x + (Math.random() - 0.5) * 0.4; cPos[i * 3 + 1] = boss.position.y + 0.2; cPos[i * 3 + 2] = boss.position.z + (Math.random() - 0.5) * 0.4;
+      const a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 2.5;
+      cVel[i * 3] = Math.cos(a) * sp; cVel[i * 3 + 1] = 2 + Math.random() * 3; cVel[i * 3 + 2] = Math.sin(a) * sp;
+      col.setHSL(Math.random(), 1, 0.6); cCol[i * 3] = col.r; cCol[i * 3 + 1] = col.g; cCol[i * 3 + 2] = col.b;
+    }
+    confGeo.attributes.color.needsUpdate = true; confLife = 3.2; confetti.visible = true;
+  }
+  const projV = new THREE.Vector3();
+
   // ---------- Particulas ----------
   const MAXP = QUALITY[0].particles;
   const pPos = new Float32Array(MAXP * 3), pSize = new Float32Array(MAXP), pSeed = new Float32Array(MAXP);
@@ -297,6 +323,27 @@ export function createScene(canvas) {
     head.material.emissiveIntensity = 0.2 + cur.energy * 0.3 + (cur.shake ? 0.25 + Math.sin(t * 30) * 0.15 : 0);
     setRing(st.score, new THREE.Color().copy(cur.color));
 
+    // efectos: rabia (late y brilla), sueno (Zzz) y confeti
+    const rage = st.fx === 'rage';
+    const sc = 1 + (rage ? 0.07 * Math.sin(t * 16) : 0);
+    boss.scale.setScalar(boss.scale.x + (sc - boss.scale.x) * 0.3);
+    bossLight.intensity = 14 + (rage ? 26 + 10 * Math.sin(t * 20) : 0);
+    const sleeping = st.fx === 'sleep';
+    zzz.forEach((z, i) => {
+      z.visible = sleeping;
+      if (sleeping) { const ph = (t * 0.4 + i / 3) % 1; z.position.set(0.55 + ph * 0.4, 0.45 + ph * 0.9, 0.3); z.material.opacity = Math.sin(ph * Math.PI); z.scale.setScalar(0.22 + ph * 0.25); }
+    });
+    if (confLife > 0) {
+      confLife -= dt;
+      for (let i = 0; i < CN; i++) {
+        cVel[i * 3 + 1] -= 5 * dt;
+        cPos[i * 3] += cVel[i * 3] * dt; cPos[i * 3 + 1] += cVel[i * 3 + 1] * dt; cPos[i * 3 + 2] += cVel[i * 3 + 2] * dt;
+      }
+      confGeo.attributes.position.needsUpdate = true;
+      confetti.material.opacity = Math.min(1, confLife);
+      if (confLife <= 0) confetti.visible = false;
+    }
+
     // pantalla
     screenMat.uniforms.time.value = t;
     screenMat.uniforms.live.value += ((st.camLive ? 1 : 0) - screenMat.uniforms.live.value) * k;
@@ -353,6 +400,11 @@ export function createScene(canvas) {
   return {
     setView,
     getView: () => view,
+    burst,
+    getBossScreenPos() { // posicion del jefe en pantalla (px) para el bocadillo flotante
+      projV.copy(boss.position); projV.y += 0.95; projV.project(camera);
+      return { x: (projV.x * 0.5 + 0.5) * canvas.clientWidth, y: (-projV.y * 0.5 + 0.5) * canvas.clientHeight, visible: projV.z > -1 && projV.z < 1 };
+    },
     setQuality(l) { // 'auto' o 0..3
       if (l === 'auto') { auto = true; return; }
       auto = false;

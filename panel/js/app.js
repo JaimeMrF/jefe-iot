@@ -1,5 +1,6 @@
 import { createScene } from './scene.js';
 import { BleLink, errText, RESET_ES } from './ble.js';
+import { createBossUI } from './boss.js';
 
 const $ = (id) => document.getElementById(id);
 const DEVICE = 'esp32cam-01';
@@ -342,15 +343,10 @@ setInterval(async () => {
 }, 1000);
 
 // ---------- Logica del jefe (demo local; el calculo oficial va en Node-RED) ----------
-const SAY = {
-  focused: ['Mmm... buen ritmo. No te acostumbres.', 'Veo trabajo. Qué sospechoso.', 'Sigue así y quizá te deje respirar.'],
-  distracted: ['¿Eso es un celular?', 'Movimiento excesivo. ¿Estás bailando?', 'Vuelve a la pantalla. YA.'],
-  absent: ['¿Dónde estás? El jefe pregunta.', 'Escritorio vacío. Se descuenta ánimo.', 'Silencio sospechoso...'],
-  unknown: ['Conecta mi ojo para vigilarte.']
-};
 const LABEL = { focused: 'ENFOCADO', distracted: 'DISTRAÍDO', absent: 'AUSENTE', unknown: 'SIN DATOS' };
 const COLOR = { focused: '#19ffa0', distracted: '#ff3355', absent: '#4a7dff', unknown: '#8892a8' };
-let sayIdx = 0, lastSay = 0, mAvg = 0;
+let mAvg = 0;
+const bossUI = createBossUI($, scene, log);
 setInterval(() => {
   const now = Date.now();
   if (IS_HTTPS && now - (S.lastLive || 0) > 10000) S.httpOk = false; // sin 'live' el movimiento viene de la telemetria
@@ -361,16 +357,16 @@ setInterval(() => {
     if (mAvg < 1.2) { S.lowSince ||= now; if (now - S.lowSince > 20000) st = 'absent'; else if (st === 'unknown') st = 'focused'; }
     else { S.lowSince = 0; st = mAvg > 12 ? 'distracted' : 'focused'; }
   }
-  if (st !== S.boss) { S.boss = st; lastSay = 0; log(`El jefe: ${LABEL[st]}`); }
+  if (st !== S.boss) { S.boss = st; log(`El jefe: ${LABEL[st]}`); }
   const target = { focused: 100, distracted: 0, absent: 50, unknown: S.score }[st];
   S.score += (target - S.score) * 0.03;
-  if (now - lastSay > 20000) { const a = SAY[st]; $('boss-say').textContent = a[sayIdx++ % a.length]; lastSay = now; }
   $('boss-state').textContent = LABEL[st]; $('boss-state').style.color = COLOR[st];
   $('score-num').textContent = Math.round(S.score); $('score-bar').style.width = `${S.score}%`; $('score-bar').style.background = COLOR[st];
   $('m-motion').textContent = S.haveMotion ? S.motion.toFixed(1) : '--';
   $('m-bright').textContent = S.haveMotion ? S.brightness.toFixed(0) : '--';
   scene?.update({ motion: S.haveMotion ? S.motion : 0, mood: st, score: S.score });
   pushSpark(S.haveMotion ? S.motion : 0);
+  bossUI.tick(st);
 }, 1000);
 
 // ---------- Sparkline de movimiento ----------

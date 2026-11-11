@@ -4,11 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Jefe IoT</title>
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="styles.css">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 </head>
 <body>
 <canvas id="gl"></canvas>
+<div id="bubble" hidden></div>
 
 <div id="hud">
   <header id="top">
@@ -108,6 +110,42 @@
       <div class="row between"><div id="boss-state" class="big">SIN DATOS</div><div id="score-num" class="mono big">0</div></div>
       <div class="bar"><div id="score-bar"></div></div>
       <div id="boss-say" class="say">Conecta mi ojo para vigilarte.</div>
+      <div class="row wrap">
+        <label class="tog"><input type="checkbox" id="b-voice"><span>Voz del jefe</span></label>
+        <label class="tog"><input type="checkbox" id="b-sound"><span>Sonidos y alarma</span></label>
+      </div>
+
+      <div class="pomo">
+        <div class="row between"><span id="pomo-mode" class="lbl">Pomodoro</span><span id="pomo-time" class="mono big">25:00</span></div>
+        <div class="row wrap">
+          <button id="pomo-go" class="primary small">Iniciar</button>
+          <button id="pomo-pause" class="ghost small">Pausa</button>
+          <button id="pomo-reset" class="ghost small">Reiniciar</button>
+          <select id="pomo-cfg" aria-label="Duracion del pomodoro"><option value="25-5" selected>25 + 5</option><option value="15-3">15 + 3</option><option value="50-10">50 + 10</option><option value="1-1">1 + 1 (prueba)</option></select>
+        </div>
+        <div id="pomo-stats" class="hint"></div>
+      </div>
+
+      <div class="chatbox">
+        <div id="chat-log" class="chat"></div>
+        <form id="chat-form" class="row"><input id="chat-in" type="text" placeholder="Dile una excusa al jefe..." autocomplete="off" maxlength="120"><button class="ghost small" type="submit">Enviar</button></form>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Tu día</h2>
+      <div class="metrics">
+        <div><span>Enfocado</span><b id="day-f" class="mono">0 min</b></div>
+        <div><span>Distraído</span><b id="day-d" class="mono">0 min</b></div>
+        <div><span>Ausente</span><b id="day-a" class="mono">0 min</b></div>
+        <div><span>% enfoque</span><b id="day-pct" class="mono">0%</b></div>
+        <div><span>Mejor racha</span><b id="day-best" class="mono">0 min</b></div>
+        <div><span>Distracciones</span><b id="day-dists" class="mono">0</b></div>
+      </div>
+      <span class="lbl">Horas del día (verde enfocado, rojo distraído, azul ausente)</span>
+      <canvas id="day-hours" width="300" height="70"></canvas>
+      <span class="lbl">Línea de tiempo de hoy</span>
+      <canvas id="day-line" width="300" height="34"></canvas>
     </section>
 
     <section class="card">
