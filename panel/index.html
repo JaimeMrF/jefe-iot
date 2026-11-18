@@ -128,6 +128,15 @@
       <div class="row between"><div id="boss-state" class="big" data-st="unknown">SIN DATOS</div><div class="mono big"><span id="score-num">0</span><small class="unit">/100</small></div></div>
       <div class="bar" role="progressbar" id="score-pb" aria-label="Puntaje de productividad" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="score-bar"></div></div>
       <p id="srv-boss" class="hint" hidden></p>
+      <div class="pers">
+        <span class="lbl" id="pers-lbl">Personalidad del jefe</span>
+        <div class="seg pers-seg" id="pers" role="radiogroup" aria-labelledby="pers-lbl" aria-describedby="pers-hint">
+          <button type="button" role="radio" aria-checked="false" tabindex="-1" data-p="estricto">Estricto</button>
+          <button type="button" role="radio" aria-checked="true" tabindex="0" data-p="motivador">Motivador</button>
+          <button type="button" role="radio" aria-checked="false" tabindex="-1" data-p="sarcastico">Sarcástico</button>
+        </div>
+        <p id="pers-hint" class="hint" aria-live="polite"></p>
+      </div>
       <p id="boss-say" class="say" aria-live="polite">Conecta mi ojo para vigilarte.</p>
       <div class="row wrap">
         <label class="tog"><input type="checkbox" id="b-voice"><span>Voz del jefe</span></label>
@@ -150,6 +159,26 @@
         <div id="chat-log" class="chat" role="log" aria-label="Conversación con el jefe" aria-live="polite"></div>
         <form id="chat-form" class="row"><input id="chat-in" type="text" placeholder="Dile una excusa al jefe..." autocomplete="off" maxlength="120" aria-label="Tu excusa"><button class="ghost small" type="submit">Enviar</button></form>
       </div>
+    </section>
+
+    <section class="card" id="prog" aria-labelledby="h-prog">
+      <div class="row between"><h2 id="h-prog">Progreso</h2><button id="btn-report" class="ghost small" type="button" aria-haspopup="dialog" aria-controls="report">Ver reporte</button></div>
+      <div class="lvl">
+        <div class="lvl-badge" aria-hidden="true"><span id="lvl-num">–</span></div>
+        <div class="lvl-info">
+          <div class="row between"><b id="lvl-title">Nivel –</b><span id="xp-txt" class="mono hint">– xp</span></div>
+          <div class="bar" role="progressbar" id="xp-pb" aria-label="Experiencia hacia el siguiente nivel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="xp-bar"></div></div>
+          <span id="xp-next" class="hint"></span>
+        </div>
+      </div>
+      <div class="metrics two">
+        <div><span>Racha de días</span><b id="st-days" class="mono">–</b><small id="st-days-best">mejor: –</small></div>
+        <div><span>Foco seguido</span><b id="st-focus" class="mono">–</b><small id="st-focus-best">mejor: –</small></div>
+      </div>
+      <p id="prog-empty" class="empty">Tu progreso llegará desde el servidor. Mientras tanto, sigue sumando minutos enfocado.</p>
+      <p id="rep-sum" class="hint"></p>
+      <div class="row between"><span class="lbl" id="ach-lbl">Logros</span><span id="ach-count" class="mono hint">0/8</span></div>
+      <ul id="ach" class="ach-grid" aria-labelledby="ach-lbl"></ul>
     </section>
 
     <section class="card" aria-labelledby="h-day">
@@ -207,6 +236,55 @@
 </div>
 
 <div id="toasts" class="toasts" aria-live="polite" aria-relevant="additions"></div>
+
+<dialog id="report" class="dlg" aria-labelledby="h-report">
+  <div class="dlg-body">
+    <div class="dlg-head">
+      <h2 id="h-report">Reporte</h2>
+      <span id="rep-src" class="badge warn">Este navegador</span>
+      <button id="rep-close" class="ghost small dlg-x" type="button" aria-label="Cerrar reporte">×</button>
+    </div>
+    <p id="rep-meta" class="hint"></p>
+
+    <section aria-labelledby="rep-day-title">
+      <h3 id="rep-day-title" class="sub">Hoy</h3>
+      <div class="metrics rep-metrics">
+        <div><span>Enfocado</span><b id="rep-f" class="mono">–</b></div>
+        <div><span>Distraído</span><b id="rep-d" class="mono">–</b></div>
+        <div><span>Ausente</span><b id="rep-a" class="mono">–</b></div>
+        <div><span>% enfoque</span><b id="rep-pct" class="mono">–</b></div>
+        <div><span>Distracciones</span><b id="rep-dists" class="mono">–</b></div>
+        <div><span>Mejor racha</span><b id="rep-best" class="mono">–</b></div>
+        <div><span>Puntaje medio</span><b id="rep-score" class="mono">–</b></div>
+        <div><span>Experiencia</span><b id="rep-xp" class="mono">–</b></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="rep-week-title">
+      <h3 id="rep-week-title" class="sub">Últimos 7 días</h3>
+      <div class="legend" aria-hidden="true"><span class="lg f">Enfocado</span><span class="lg d">Distraído</span><span class="lg a">Ausente</span></div>
+      <canvas id="rep-week" class="chart" style="height:170px" role="img" aria-label="Minutos por día de la última semana"></canvas>
+      <p id="rep-week-tot" class="hint"></p>
+      <details class="adv">
+        <summary>Ver los datos en tabla</summary>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <caption class="sr-only">Minutos por día de la última semana</caption>
+            <thead><tr><th scope="col">Día</th><th scope="col">Enfocado</th><th scope="col">Distraído</th><th scope="col">Ausente</th><th scope="col">% enfoque</th><th scope="col">Distr.</th><th scope="col">Puntaje</th></tr></thead>
+            <tbody id="rep-tbody"></tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+
+    <div class="row wrap dlg-foot">
+      <button id="rep-json" class="ghost small" type="button">Descargar JSON</button>
+      <button id="rep-csv" class="ghost small" type="button">Descargar CSV</button>
+      <span class="grow"></span>
+      <button id="rep-done" class="primary small" type="button">Cerrar</button>
+    </div>
+  </div>
+</dialog>
 
 <script src="vendor/mqtt.min.js"></script>
 <script type="module" src="js/app.js"></script>

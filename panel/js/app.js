@@ -1,6 +1,7 @@
 import { createScene } from './scene.js';
 import { BleLink, errText, RESET_ES } from './ble.js';
-import { createBossUI, fitCanvas } from './boss.js';
+import { createBossUI, fitCanvas, PERSONALITIES, PERS_INFO } from './boss.js';
+import { createProgress, toDate } from './progress.js';
 
 const $ = (id) => document.getElementById(id);
 const DEVICE = 'esp32cam-01';
@@ -38,12 +39,12 @@ function log(msg, cls = '') {
 const RULE_ES = {
   distraido_prolongado: 'Distracción prolongada', ausente_largo: 'Ausencia larga', co2_alto: 'CO₂ alto', temperatura_alta: 'Temperatura alta',
   consumo_alto: 'Consumo alto', puerta_abierta_larga: 'Puerta abierta', movimiento_sospechoso: 'Movimiento sospechoso',
-  aire_exterior_malo: 'Aire exterior malo', api_error: 'Error de API', fuente_datos: 'Fuente de datos'
+  aire_exterior_malo: 'Aire exterior malo', api_error: 'Error de API', fuente_datos: 'Fuente de datos', logro: 'Logro desbloqueado'
 };
 const SEV_CLS = { critical: 'bad', warning: 'warn', info: 'info', ok: 'ok' };
-function toast(title, body = '', { sev = 'info', meta = '', ttl } = {}) {
+function toast(title, body = '', { sev = 'info', meta = '', ttl, kind = '' } = {}) {
   const box = $('toasts');
-  const cls = SEV_CLS[sev] || 'info';
+  const cls = (SEV_CLS[sev] || 'info') + (kind ? ' ' + kind : '');
   const close = mk('button', { type: 'button', textContent: '×', title: 'Cerrar' });
   close.setAttribute('aria-label', 'Cerrar aviso');
   const el = mk('div', { className: `toast ${cls}` }, mk('i', { ariaHidden: 'true' }), mk('b', { textContent: title }), close);
@@ -65,17 +66,42 @@ function toast(title, body = '', { sev = 'info', meta = '', ttl } = {}) {
   box.append(el); arm();
   while (box.children.length > 4) box.firstChild.remove();
 }
-const seenEvents = new Map(); // los eventos de esp32cam-01 llegan por dos suscripciones: deduplicar
+// Los eventos de esp32cam-01 llegan por dos suscripciones: deduplicar. Con el id del contrato v2 es exacto
+// (se recuerda 10 min); sin id, por regla + dispositivo + mensaje durante 10 s, como antes.
+const seenEvents = new Map();
+const isNewEvent = (j, now) => {
+  const hasId = j.id != null && j.id !== '';
+  const key = hasId ? `id:${j.id}` : `${j.rule}|${j.device}|${j.msg}`;
+  const seen = seenEvents.get(key);
+  if (seen && (hasId || now - seen < 10000)) return false;
+  seenEvents.set(key, now);
+  if (seenEvents.size > 80) for (const [k, t] of seenEvents) if (now - t > (k.startsWith('id:') ? 600000 : 60000)) seenEvents.delete(k);
+  return true;
+};
+// hora del evento (ts del servidor) o de recepcion; con fecha si no es de hoy
+function fmtWhen(d) {
+  const t = d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? t : `${d.toLocaleDateString('es', { day: 'numeric', month: 'short' })} ${t}`;
+}
 function onEvent(j) {
   if (!j || typeof j !== 'object') return;
-  const key = `${j.rule}|${j.device}|${j.msg}`, now = Date.now();
-  if (now - (seenEvents.get(key) || 0) < 10000) return;
-  seenEvents.set(key, now);
-  if (seenEvents.size > 50) for (const [k, t] of seenEvents) if (now - t > 60000) seenEvents.delete(k);
+  const now = Date.now();
+  if (!isNewEvent(j, now)) return;
+  const at = toDate(j.ts) || new Date(now);
   const sev = ['critical', 'warning', 'info'].includes(j.severity) ? j.severity : 'info';
   const title = RULE_ES[j.rule] || j.rule || 'Alerta';
   const dev = DEV_NAMES[j.device]?.[0] || (j.device === DEVICE ? 'ESP32-CAM' : j.device === 'boss' ? 'El jefe' : j.device || '');
-  toast(title, j.msg || '', { sev, meta: [dev, new Date().toLocaleTimeString()].filter(Boolean).join(' · ') });
+  const meta = [dev, fmtWhen(at)].filter(Boolean).join(' · ');
+  if (j.rule === 'logro') {
+    const name = String(j.msg || '').replace(/^\s*logro:\s*/i, '').trim();
+    const recent = Math.abs(now - at.getTime()) < 120000; // no festejar eventos viejos (reconexion)
+    toast(`🏆 ${title}`, name || j.msg || '', { sev: 'ok', kind: 'achv', meta: [j.value != null ? `Nivel ${j.value}` : '', fmtWhen(at)].filter(Boolean).join(' · '), ttl: 10000 });
+    log(`Logro desbloqueado: ${name || j.msg || '?'}`);
+    progress?.onAchievementEvent(name, at);
+    if (recent) bossUI?.celebrate(name);
+    return;
+  }
+  toast(title, j.msg || '', { sev, meta });
   log(`Alerta ${sev}: ${title}${j.msg ? ' · ' + j.msg : ''}`, sev === 'info' ? '' : sev === 'critical' ? 'e' : 'w');
   bossUI?.notify(sev);
   if (j.rule === 'fuente_datos') { S.bridgeMode = j.value ? 'real' : 'sim'; refreshChips(); }
@@ -413,8 +439,10 @@ function startMqtt() {
     if (c !== client) return;
     mq.retry = 0; S.mqttUp = true; setMq('up');
     log('Servidor MQTT conectado');
-    c.subscribe([`jefe/${DEVICE}/#`, 'jefe/+/state', 'jefe/+/event', 'jefe/boss/telemetry', 'jefe/bridge/mode', 'jefe/bridge/status'], (err) => { if (err) log('MQTT: suscripción rechazada', 'e'); });
+    // jefe/boss/state (personalidad) ya entra por jefe/+/state
+    c.subscribe([`jefe/${DEVICE}/#`, 'jefe/+/state', 'jefe/+/event', 'jefe/boss/telemetry', 'jefe/boss/stats', 'jefe/boss/report', 'jefe/bridge/mode', 'jefe/bridge/status'], (err) => { if (err) log('MQTT: suscripción rechazada', 'e'); });
     requestStream(true);
+    sendPersonality();
     renderDevs();
   });
   c.on('close', () => {
@@ -469,7 +497,12 @@ function onMessage(topic, buf) {
     refreshChips(); return;
   }
   if (t === 'event') return onEvent(j);
-  if (id === 'boss' && t === 'telemetry') return onServerBoss(j);
+  if (id === 'boss') {
+    if (t === 'telemetry') { progress.onTelemetry(j); return onServerBoss(j); }
+    if (t === 'state') return onBossState(j);
+    if (t === 'stats') return progress.onStats(j);
+    if (t === 'report') return progress.onReport(j);
+  }
   if (t === 'state' && id !== DEVICE) { if (j && typeof j === 'object') onDevState(id, j); return; }
   if (id !== DEVICE) return;
   if (t === 'telemetry') { if (j && typeof j === 'object') onTelemetry(j); }
@@ -541,6 +574,7 @@ function updateRemote() {
   const up = S.mqttUp;
   $('remote').disabled = !up;
   $('remote-hint').hidden = up;
+  renderPersHint();
 }
 $('c-flash').onchange = (e) => pub({ flash: e.target.checked });
 $('c-enabled').onchange = (e) => pub({ enabled: e.target.checked });
@@ -652,6 +686,61 @@ const LABEL = { focused: 'ENFOCADO', distracted: 'DISTRAÍDO', absent: 'AUSENTE'
 const COLOR = { focused: '#19ffa0', distracted: '#ff3355', absent: '#4a7dff', unknown: '#8892a8' };
 let mAvg = 0;
 const bossUI = createBossUI($, scene, log);
+const progress = createProgress({ $, mk, bossUI, log });
+
+// ---------- Personalidad del jefe (contrato v2: jefe/boss/cmd y jefe/boss/state retenido) ----------
+// Se aplica al instante en el panel; el servidor la confirma con jefe/boss/state y es quien manda.
+const PERS_BTNS = [...document.querySelectorAll('#pers [role=radio]')];
+const P8 = { cur: PERSONALITIES.includes(store.get('pers')) ? store.get('pers') : 'motivador', confirmed: false, pending: null, sentAt: 0, timer: 0 };
+function renderPersHint() {
+  const lim = `Avisa a los ${PERS_INFO[P8.cur].limit} s de distracción`;
+  const up = client?.connected;
+  $('pers-hint').textContent = P8.pending
+    ? (!up ? `${lim}. Sin servidor: se enviará al conectar.`
+      : P8.sentAt && Date.now() - P8.sentAt > 6000 ? `${lim}. El servidor no confirmó el cambio: por ahora solo cambia este panel.`
+      : `${lim}. Enviando al servidor...`)
+    : `${lim}${P8.confirmed ? '. Sincronizada con el servidor.' : '.'}`;
+}
+function applyPersonality(p, announce = false) {
+  P8.cur = p; store.set('pers', p);
+  PERS_BTNS.forEach((b) => { const on = b.dataset.p === p; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
+  document.body.dataset.pers = p;
+  bossUI.setPersonality(p, { announce });
+  scene?.update({ personality: p });
+  renderPersHint();
+}
+function sendPersonality() {
+  if (!P8.pending || !client?.connected) return renderPersHint();
+  client.publish('jefe/boss/cmd', JSON.stringify({ personality: P8.pending }), { qos: 1 });
+  P8.sentAt = Date.now();
+  log(`Personalidad del jefe: ${PERS_INFO[P8.pending].name}`);
+  renderPersHint();
+  setTimeout(renderPersHint, 6500);
+}
+const sendPersonalitySoon = debounce(() => { bossUI.setPersonality(P8.cur, { announce: true }); sendPersonality(); }, 450);
+function choosePersonality(p) {
+  if (!PERSONALITIES.includes(p) || (p === P8.cur && !P8.pending)) return;
+  applyPersonality(p); // el anuncio con voz espera a que el usuario deje de cambiar (flechas)
+  P8.pending = p; P8.sentAt = 0;
+  sendPersonalitySoon();
+}
+function onBossState(j) {
+  if (!j || typeof j !== 'object' || !PERSONALITIES.includes(j.personality)) return;
+  // el retenido viejo puede llegar justo despues de mandar el cambio: ignorarlo unos segundos
+  if (P8.pending && j.personality !== P8.pending && (!P8.sentAt || Date.now() - P8.sentAt < 8000)) return;
+  P8.pending = null; P8.confirmed = true;
+  if (j.personality !== P8.cur) applyPersonality(j.personality); else renderPersHint();
+}
+PERS_BTNS.forEach((b, i) => {
+  b.onclick = () => choosePersonality(b.dataset.p);
+  b.onkeydown = (e) => { // patron radiogroup: las flechas mueven y seleccionan
+    const d = ['ArrowRight', 'ArrowDown'].includes(e.key) ? 1 : ['ArrowLeft', 'ArrowUp'].includes(e.key) ? -1 : 0; if (!d) return;
+    e.preventDefault();
+    const nb = PERS_BTNS[(i + d + PERS_BTNS.length) % PERS_BTNS.length];
+    nb.focus(); choosePersonality(nb.dataset.p);
+  };
+});
+applyPersonality(P8.cur);
 const ago = (ms) => { const s = Math.round(ms / 1000); return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min` : `${Math.floor(s / 3600)} h`; };
 setInterval(() => {
   const now = Date.now();

@@ -15,6 +15,13 @@ const MOODS = {
   absent: { color: 0x4a7dff, mood: 0, eyes: 0.08, tilt: 0.22, droop: 0.12 },
   unknown: { color: 0x8892a8, mood: 0, eyes: 0.6, scan: 1 }
 };
+// Gesto base de cada personalidad (contrato v2), sumado al del estado. El color sigue indicando el estado.
+// brow: ceño (+ enojado), browY: altura de cejas, smile: sesgo de la boca, smirk: ceja alzada y boca torcida.
+const PERS_FACE = {
+  estricto: { brow: 0.4, browY: -0.025, smile: -0.35, smirk: 0 },
+  motivador: { brow: -0.3, browY: 0.035, smile: 0.35, smirk: 0 },
+  sarcastico: { brow: 0, browY: 0, smile: 0.1, smirk: 1 }
+};
 // Monitor y jefe quedan centrados en pantalla (antes caian debajo de los paneles laterales)
 const VIEWS = {
   overview: { pos: [0.9, 2.7, 8.6], look: [1.1, 1.1, 0] },
@@ -258,7 +265,8 @@ export function createScene(canvas) {
   let camTex = null, camCanvas = null, camCtx = null, view = 'overview', narrow = false, firstAim = true;
   const target = { color: new THREE.Color(0x8892a8), mood: 0, eyes: 0.6, tilt: 0, droop: 0, scan: 1 };
   const cur = { color: new THREE.Color(0x8892a8), mood: 0, eyes: 0.6, energy: 0, shake: 0, tilt: 0, droop: 0, scan: 1 };
-  const st = { motion: 0, mood: 'unknown', score: 0, flash: false, camLive: false, fx: null };
+  const face = { brow: 0, browY: 0, smile: 0, smirk: 0 }; // gesto de la personalidad, suavizado
+  const st = { motion: 0, mood: 'unknown', score: 0, flash: false, camLive: false, fx: null, personality: 'motivador' };
   let lastLit = -1, lastRingColor = -1, keyTimer = 0, lastRender = 0;
   const mouse = new THREE.Vector2();
   const statsCbs = [], viewCbs = [];
@@ -353,12 +361,16 @@ export function createScene(canvas) {
     const lookY = THREE.MathUtils.clamp(mouse.y * 0.03, -0.04, 0.04);
     eyeL.position.set(-0.2 + lookX, 0.08 + lookY, 0.5); eyeR.position.set(0.2 + lookX, 0.08 + lookY, 0.5);
 
-    const brow = -cur.mood; // enojado: ceja interior hacia abajo
-    browL.rotation.z = -brow * 0.45; browR.rotation.z = brow * 0.45;
-    browL.position.y = browR.position.y = 0.27 - brow * 0.04;
-    mouth.rotation.z = cur.mood >= 0 ? Math.PI : 0;
-    mouth.scale.set(1, 0.25 + Math.abs(cur.mood) * 0.9, 1);
-    mouth.position.y = cur.mood >= 0 ? -0.12 : -0.28;
+    const pf = PERS_FACE[st.personality] || PERS_FACE.motivador, kf = 1 - Math.exp(-dt * 2.5);
+    for (const key in face) face[key] += (pf[key] - face[key]) * kf;
+    const brow = THREE.MathUtils.clamp(-cur.mood + face.brow, -1.2, 1.2); // enojado: ceja interior hacia abajo
+    browL.rotation.z = -brow * 0.45 + face.smirk * 0.28; browR.rotation.z = brow * 0.45;
+    browL.position.y = 0.27 - brow * 0.04 + face.browY + face.smirk * 0.06;
+    browR.position.y = 0.27 - brow * 0.04 + face.browY;
+    const mood = THREE.MathUtils.clamp(cur.mood + face.smile, -1, 1);
+    mouth.rotation.z = (mood >= 0 ? Math.PI : 0) + face.smirk * 0.22; // sarcastico: media sonrisa torcida
+    mouth.scale.set(1, 0.25 + Math.abs(mood) * 0.9, 1);
+    mouth.position.y = mood >= 0 ? -0.12 : -0.28;
 
     const mk = reduced ? 0.25 : 1;
     boss.position.y = 1.55 + Math.sin(t * 1.3) * 0.06 * mk - cur.droop;

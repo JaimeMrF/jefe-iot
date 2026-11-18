@@ -45,6 +45,41 @@ const P = {
     paused: ['Pomodoro en pausa. No tardes.']
   }
 };
+// ---------- Personalidades (contrato v2) ----------
+// El banco P de arriba es el tono sarcastico original. Estricto y motivador sustituyen las frases de estado;
+// pomodoro y excusas son comunes. Lo que una personalidad no define se toma de P.
+export const PERSONALITIES = ['estricto', 'motivador', 'sarcastico'];
+export const PERS_INFO = {
+  estricto: { name: 'Estricto', limit: 30, voice: { pitch: 0.5, rate: 1.12 } },
+  motivador: { name: 'Motivador', limit: 90, voice: { pitch: 1.15, rate: 1.02 } },
+  sarcastico: { name: 'Sarcástico', limit: 60, voice: { pitch: 0.75, rate: 0.93 } }
+};
+const PB = {
+  estricto: {
+    focused: ['Así se trabaja. Sin pausas.', 'Correcto. Mantén el ritmo.', 'Bien. Ahora sostenlo.', 'Enfocado, como debe ser. No aflojes.', 'Ritmo aceptable. Lo quiero constante.', 'Nada de celebrar todavía. Sigue.', 'Una tarea a la vez. Esa. Termínala.'],
+    distracted: ['Distracción detectada. Vuelve a la tarea.', 'Eso no estaba en el plan. A la pantalla.', 'Te quiero en la tarea en tres, dos, uno...', 'Concentración. Ahora.', 'Cada minuto cuenta. Ese no contó.', 'Fuera de la tarea. Corrige el rumbo.'],
+    long: ['Demasiado tiempo fuera de la tarea. Retoma ya.', 'Esto pasó de pausa a desvío. Vuelve.', 'Treinta segundos era el límite. Lo superaste.'],
+    absent: ['Puesto vacío. Queda anotado.', 'Sin ti en el escritorio no hay avance.', 'Tiempo fuera registrado.', 'El trabajo no avanza solo. Te espero.'],
+    back: ['Regresaste. Retoma donde quedaste.', 'De vuelta. Sin rodeos: a trabajar.', 'Bien. El reloj sigue corriendo.'],
+    streak: { 300: ['Cinco minutos. Es un comienzo.'], 900: ['Quince minutos. Ahora sostenlo.'], 1800: ['Media hora. Esto es lo que espero de ti.'], 3600: ['Una hora. Bien hecho. Sigue igual.'] },
+    logro: ['Logro registrado. No te duermas en los laureles.', 'Objetivo cumplido. Siguiente objetivo.'],
+    intro: 'Modo estricto. A los treinta segundos de distracción, te aviso.'
+  },
+  motivador: {
+    focused: ['¡Vas muy bien! Sigue así.', 'Qué buen ritmo llevas. Me encanta verte así.', 'Cada minuto enfocado suma. ¡Tú puedes!', 'Estás construyendo algo grande, paso a paso.', 'Mira ese enfoque. Orgullo de jefe.', 'Respira, sonríe y sigue. Lo estás logrando.'],
+    distracted: ['Ey, a todos nos pasa. Volvamos juntos.', 'Pequeña pausa, gran regreso. ¡Vamos!', 'Tu yo del futuro te agradecerá volver ahora.', 'Un respiro y de vuelta. Confío en ti.', 'No pasa nada. Lo importante es retomar.'],
+    long: ['Llevas un ratito fuera. ¿Retomamos con algo pequeño?', 'Elige una tarea mini y empieza. Yo te acompaño.'],
+    absent: ['Te guardo el puesto. Vuelve cuando estés listo.', 'Descansar también es parte del trabajo.', 'Aquí te espero con energía.'],
+    back: ['¡Bienvenido de vuelta! Con todo.', '¡Volviste! Retomemos con energía.', 'Qué bueno verte. ¡A seguir sumando!'],
+    streak: { 300: ['¡Cinco minutos seguidos! Buen arranque.'], 900: ['¡Quince minutos! Estás entrando en la zona.'], 1800: ['¡Media hora de foco! Eres imparable.'], 3600: ['¡Una hora entera! Esto merece aplausos.'] },
+    logro: ['¡Logro desbloqueado! Te lo ganaste.', '¡Qué orgullo! Uno más para la colección.'],
+    intro: 'Modo motivador. Aquí estoy para animarte.'
+  },
+  sarcastico: {
+    logro: ['Un logro. Quién lo diría.', 'Logro desbloqueado. Lo voy a enmarcar... algún día.', 'Mira tú. Resulta que sí sabes trabajar.'],
+    intro: 'Modo sarcástico. Prometo no reírme... mucho.'
+  }
+};
 const EXCUSES = [
   [/ba[ñn]o|pip[ií]|caca/i, ['Cinco minutos. Los estoy contando.', 'Hasta el jefe sabe que la naturaleza llama. Pero rapidito.']],
   [/celular|whats|tiktok|insta|mensaje|llamada|telegram/i, ['El celular es el enemigo. Déjalo boca abajo.', 'Excusa rechazada. Eso era scroll, lo vi.', 'Una llamada, ya. Pero que no se vuelva una telenovela.']],
@@ -114,8 +149,10 @@ export function createBossUI($, scene, log) {
     alarm() { for (let i = 0; i < 3; i++) tone(880, i * 0.22, 0.16, 'square', 0.1); },
     chime() { tone(659, 0, 0.25); tone(880, 0.18, 0.4); },
     bell() { tone(523, 0, 1, 'triangle', 0.2); tone(784, 0.05, 1, 'triangle', 0.15); tone(1047, 0.1, 1.2, 'triangle', 0.12); },
-    blip() { tone(740, 0, 0.12, 'sine', 0.08); }
+    blip() { tone(740, 0, 0.12, 'sine', 0.08); },
+    fanfare() { [523, 659, 784].forEach((f, i) => tone(f, i * 0.12, 0.16, 'triangle', 0.14)); tone(1047, 0.36, 0.7, 'triangle', 0.16); tone(1319, 0.42, 0.6, 'sine', 0.08); }
   };
+  let pers = 'motivador';
   const sound = (n) => { if (soundOn) { try { SFX[n]?.(); } catch { /* sin audio */ } } };
   let voices = [];
   const loadVoices = () => { try { voices = synth?.getVoices() || []; } catch { voices = []; } };
@@ -129,7 +166,8 @@ export function createBossUI($, scene, log) {
     try {
       const u = new SpeechSynthesisUtterance(text), v = pickVoice();
       if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'es-ES';
-      u.pitch = 0.6; u.rate = 1.05;
+      const vc = PERS_INFO[pers].voice;
+      u.pitch = vc.pitch; u.rate = vc.rate;
       synth.cancel(); synth.speak(u);
     } catch { /* sin voz */ }
   }
@@ -295,13 +333,14 @@ export function createBossUI($, scene, log) {
   let prev = 'unknown', stateSec = 0, streak = 0, lastAlarm = 0, lastSayAt = 0, lastChangeSay = 0, renderN = 0, lastTick = 0;
   const STREAKS = [300, 900, 1800, 3600];
   function phraseFor(st) {
-    const h = hourNow(), s = P[st] || P.unknown;
+    const h = hourNow(), s = P[st] || P.unknown, b = PB[pers];
     if (st === 'unknown') return pickFrom('unk', P.unknown);
-    const pool = [...s.any];
-    if (st === 'focused') pool.push(...(h < 12 ? s.morning : h < 19 ? s.afternoon : s.night));
-    if (st === 'distracted') { if (stateSec >= 120) pool.push(...s.long); if (day.dists >= 3) pool.push(...s.repeat); }
-    if (st === 'absent') { if (stateSec > 600) pool.push(...s.long); if (h >= 12 && h < 14) pool.push(...s.lunch); if (h >= 22 || h < 6) pool.push(...s.night); }
-    return pickFrom('ph' + st, pool);
+    const sarc = pers === 'sarcastico';
+    const pool = [...(b[st] || s.any)];
+    if (st === 'focused' && pers !== 'estricto') pool.push(...(h < 12 ? s.morning : h < 19 ? s.afternoon : s.night));
+    if (st === 'distracted') { if (stateSec >= 120) pool.push(...(b.long || s.long)); if (sarc && day.dists >= 3) pool.push(...s.repeat); }
+    if (st === 'absent') { if (sarc && stateSec > 600) pool.push(...s.long); if (h >= 12 && h < 14) pool.push(...s.lunch); if (h >= 22 || h < 6) pool.push(...s.night); }
+    return pickFrom(pers + st, pool);
   }
   function tick(st) {
     const now = Date.now();
@@ -319,7 +358,7 @@ export function createBossUI($, scene, log) {
       if (now - lastChangeSay > 8000 && st !== 'unknown') {
         lastChangeSay = now; lastSayAt = now;
         const pomoScold = st === 'distracted' && PM.mode === 'focus' && !PM.paused;
-        say(was === 'absent' && wasSec >= 60 && st !== 'absent' ? pickFrom('back', P.back) : pomoScold ? pickFrom('pd', P.pomo.distracted) : phraseFor(st));
+        say(was === 'absent' && wasSec >= 60 && st !== 'absent' ? pickFrom(pers + 'back', PB[pers].back || P.back) : pomoScold ? pickFrom('pd', P.pomo.distracted) : phraseFor(st));
       }
     } else stateSec += dt;
     // minuto, hora y rachas
@@ -331,12 +370,16 @@ export function createBossUI($, scene, log) {
     if (st === 'focused') {
       const before = streak; streak += dt;
       const hit = STREAKS.find((s) => before < s && streak >= s);
-      if (hit) { say(pickFrom('st' + hit, P.streak[hit])); sound('chime'); scene?.burst?.(); }
+      if (hit) { say(pickFrom(pers + 'st' + hit, PB[pers].streak?.[hit] || P.streak[hit])); sound('chime'); scene?.burst?.(); }
       day.best = Math.max(day.best, streak);
     }
-    // alarma por distraccion sostenida (mas estricta en pomodoro)
-    const limit = PM.mode === 'focus' && !PM.paused ? 20 : 60;
-    if (st === 'distracted' && stateSec >= limit && now - lastAlarm > limit * 1000) { lastAlarm = now; sound('alarm'); say(pickFrom('long', stateSec >= 120 ? P.distracted.long : P.distracted.any)); }
+    // alarma por distraccion sostenida: el limite depende de la personalidad (como en el servidor) y es mas corto en pomodoro
+    const plim = PERS_INFO[pers].limit, limit = PM.mode === 'focus' && !PM.paused ? Math.min(20, plim) : plim;
+    if (st === 'distracted' && stateSec >= limit && now - lastAlarm > limit * 1000) {
+      lastAlarm = now; sound('alarm');
+      const b = PB[pers];
+      say(pickFrom(pers + 'long', stateSec >= Math.max(120, limit * 2) ? (b.long || P.distracted.long) : (b.distracted || P.distracted.any)));
+    }
     // frase periodica sin voz para que el panel no sea estatico
     if (now - lastSayAt > 30000 && st !== 'unknown') { lastSayAt = now; say(phraseFor(st), { voice: false }); }
     scene?.update?.({ fx: st === 'distracted' ? 'rage' : st === 'absent' ? 'sleep' : null });
@@ -353,7 +396,47 @@ export function createBossUI($, scene, log) {
     if (sev === 'critical') sound('alarm'); else if (sev === 'warning') sound('chime'); else sound('blip');
   }
 
+  // ---------- Personalidad ----------
+  function setPersonality(p, { announce = false } = {}) {
+    if (!PERS_INFO[p]) return;
+    pers = p;
+    if (announce) { say(PB[p].intro); sound('blip'); }
+  }
+
+  // ---------- Logro desbloqueado (evento rule "logro") ----------
+  function celebrate(name, { fx = true } = {}) {
+    sound('fanfare');
+    const line = pickFrom(pers + 'logro', PB[pers].logro || PB.sarcastico.logro);
+    say(name ? `${line} «${name}».` : line);
+    if (fx) scene?.burst?.(); // burst() ya respeta prefers-reduced-motion
+  }
+
+  // ---------- Reporte local (respaldo si el servidor aun no publica jefe/boss/report) ----------
+  // Usa los dias guardados en este navegador (se conservan 7). Mismo formato Day del contrato v2.
+  function localDay(date) {
+    let d = null;
+    if (date === day.date) d = day;
+    else { try { d = JSON.parse(localStorage.getItem('jefe.day.' + date)); } catch { d = null; } }
+    let f = 0, di = 0, a = 0;
+    if (d?.h?.length === 24) for (const h of d.h) { f += h[0]; di += h[1]; a += h[2]; }
+    const tot = f + di + a;
+    return {
+      date, focused_min: Math.round(f / 60), distracted_min: Math.round(di / 60), absent_min: Math.round(a / 60),
+      focus_pct: tot >= 60 ? Math.round((f / tot) * 100) : 0, distractions: d?.dists || 0, // menos de 1 min: sin porcentaje engañoso
+      best_focus_streak_min: Math.round((d?.best || 0) / 60), score_avg: null, xp: null
+    };
+  }
+  function localReport() {
+    saveDay();
+    const week = [];
+    for (let i = 6; i >= 0; i--) {
+      const t = new Date(); t.setHours(12, 0, 0, 0); t.setDate(t.getDate() - i);
+      week.push(localDay(`${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`));
+    }
+    return { ts: Date.now(), today: week[6], week };
+  }
+
   renderPomo(); renderDay();
   say(pickFrom('unk', P.unknown), { voice: false });
-  return { tick, say, notify };
+  return { tick, say, notify, setPersonality, celebrate, localReport };
 }
