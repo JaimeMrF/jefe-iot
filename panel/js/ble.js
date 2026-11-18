@@ -69,8 +69,12 @@ export class BleLink extends EventTarget {
     this.enc = new TextEncoder();
     this.scanList = [];
     this.scanDone = null;
+    this.gen = 0;          // generacion: invalida bucles de reconexion viejos
+    this.opening = false;  // true mientras _open() intenta conectar (ignora desconexiones intermedias)
+    this.looping = false;  // true mientras corre el bucle de reconexion
     this._onStatusEv = (e) => this._parseStatus(e.target.value);
     this._onScanEv = (e) => this._parseScan(e.target.value);
+    this._onDiscEv = () => this._onDisc();
   }
 
   static check() {
@@ -80,7 +84,11 @@ export class BleLink extends EventTarget {
   }
 
   emit(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail })); }
-  setState(state, info) { this.state = state; this.emit('state', { state, info }); }
+  setState(state, info) {
+    const changed = state !== this.state || info !== this.info;
+    this.state = state; this.info = info;
+    if (changed) this.emit('state', { state, info });
+  }
   _enqueue(fn) {
     const run = this.queue.then(() => fn());
     this.queue = run.catch(() => {});
@@ -92,9 +100,11 @@ export class BleLink extends EventTarget {
     if (bad) { this.emit('error', { code: bad }); return false; }
     if (this.state === 'connecting' || this.state === 'reconnecting') return false;
     this.manual = false;
+    this.gen++;
     this.setState('connecting', 'Buscando dispositivo...');
+    let dev;
     try {
-      this.device = await navigator.bluetooth.requestDevice({
+      dev = await navigator.bluetooth.requestDevice({
         filters: [{ namePrefix: 'JefeCAM' }],
         optionalServices: [SVC]
       });
@@ -103,14 +113,21 @@ export class BleLink extends EventTarget {
       this.emit('error', { code: e.name === 'NotFoundError' ? 'cancelled' : mapErr(e) });
       return false;
     }
-    this.device.addEventListener('gattserverdisconnected', () => this._onDisc());
+    // Un solo listener por dispositivo: si se reconecta al mismo, no se duplican los bucles de reconexion
+    this.device?.removeEventListener('gattserverdisconnected', this._onDiscEv);
+    this.device = dev;
+    this.device.addEventListener('gattserverdisconnected', this._onDiscEv);
     return this._open(3, false);
   }
 
   async _open(tries, quiet) {
     let last = null;
-    for (let i = 1; i <= tries; i++) {
-      try {
+    const gen = this.gen;
+    this.opening = true;
+    try {
+      for (let i = 1; i <= tries; i++) {
+        if (gen !== this.gen || this.manual) return false;
+        try {
         this.setState(quiet ? 'reconnecting' : 'connecting', `Conectando (${i}/${tries})...`);
         this.server = await withTimeout(this.device.gatt.connect(), 10000, 'gatt_timeout');
         const svc = await withTimeout(this.server.getPrimaryService(SVC), 8000, 'svc_timeout');
@@ -126,49 +143,67 @@ export class BleLink extends EventTarget {
         this.ch.scan.addEventListener('characteristicvaluechanged', this._onScanEv);
         await this.ch.status.startNotifications();
         await this.ch.scan.startNotifications();
-        try { this._parseStatus(await this.ch.status.readValue()); } catch { /* llegara por notificacion */ }
-        this.setState('connected', this.device.name);
-        return true;
-      } catch (e) {
-        last = e;
-        try { this.device.gatt.disconnect(); } catch { /* ya cerrado */ }
-        await sleep(700 * i);
+          try { this._parseStatus(await this.ch.status.readValue(), true); } catch { /* llegara por notificacion */ }
+          if (gen !== this.gen || this.manual) { try { this.device.gatt.disconnect(); } catch { /* nada */ } return false; }
+          this.setState('connected', this.device.name);
+          return true;
+        } catch (e) {
+          last = e;
+          try { this.device.gatt.disconnect(); } catch { /* ya cerrado */ }
+          if (i < tries) await sleep(700 * i);
+        }
       }
+    } finally {
+      this.opening = false;
     }
-    this.setState(quiet ? 'reconnecting' : 'off');
-    if (!quiet) this.emit('error', { code: mapErr(last) });
+    if (gen !== this.gen || this.manual) return false;
+    if (!quiet) { this.setState('off'); this.emit('error', { code: mapErr(last) }); }
     return false;
   }
 
   _onDisc() {
     this.ch = {};
+    if (this.opening) return; // _open() ya esta reintentando
     if (this.manual) { this.setState('off'); return; }
     this.setState('reconnecting', 'Bluetooth perdido, reconectando...');
     this._reconnectLoop();
   }
 
   async _reconnectLoop() {
-    for (let i = 1; i <= 10 && !this.manual; i++) {
-      await sleep(Math.min(1000 * i, 6000));
-      if (this.manual) return;
-      if (await this._open(1, true)) { this.emit('info', { msg: 'Bluetooth recuperado' }); return; }
-    }
-    if (!this.manual) {
-      this.setState('off');
-      this.emit('error', { code: 'ble_out_of_range' });
+    if (this.looping) return;
+    this.looping = true;
+    const gen = this.gen;
+    const alive = () => gen === this.gen && !this.manual;
+    try {
+      for (let i = 1; i <= 10 && alive(); i++) {
+        this.setState('reconnecting', `Bluetooth perdido, reconectando (${i}/10)...`);
+        await sleep(Math.min(1000 * i, 6000));
+        if (!alive()) return;
+        if (await this._open(1, true)) { this.emit('info', { msg: 'Bluetooth recuperado' }); return; }
+      }
+      if (alive()) {
+        this.setState('off');
+        this.emit('error', { code: 'ble_out_of_range' });
+      }
+    } finally {
+      this.looping = false;
     }
   }
 
   disconnect() {
     this.manual = true;
+    this.gen++;
     try { this.device?.gatt?.disconnect(); } catch { /* nada */ }
+    this.ch = {};
+    this.scanDone?.(this.scanList);
     this.setState('off');
   }
 
-  _parseStatus(dv) {
+  _parseStatus(dv, retried = false) {
     try { this.emit('status', JSON.parse(this.dec.decode(dv))); } catch {
-      // notificacion truncada por MTU pequeno: leer la caracteristica completa
-      this._enqueue(() => this.ch.status?.readValue()).then((v) => v && this._parseStatus(v)).catch(() => {});
+      // notificacion truncada por MTU pequeno: leer la caracteristica completa (una sola vez, sin bucles)
+      if (retried) return;
+      this._enqueue(() => this.ch.status?.readValue()).then((v) => v && this._parseStatus(v, true)).catch(() => {});
     }
   }
 

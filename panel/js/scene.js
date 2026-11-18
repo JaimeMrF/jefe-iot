@@ -1,5 +1,6 @@
 // Escena 3D del panel: escritorio, monitor CRT con la imagen real de la ESP32-CAM, jefe holografico,
-// teclado reactivo y campo de particulas. Incluye calidad adaptativa segun FPS.
+// teclado reactivo y campo de particulas. Incluye calidad adaptativa segun FPS, pausa con la pestana oculta,
+// respeto a prefers-reduced-motion y limpieza completa en dispose().
 import * as THREE from 'three';
 
 const QUALITY = [
@@ -11,13 +12,20 @@ const QUALITY = [
 const MOODS = {
   focused: { color: 0x19ffa0, mood: 0.8, eyes: 1 },
   distracted: { color: 0xff3355, mood: -1, eyes: 1 },
-  absent: { color: 0x4a7dff, mood: 0, eyes: 0.08 },
-  unknown: { color: 0x8892a8, mood: 0, eyes: 0.6 }
+  absent: { color: 0x4a7dff, mood: 0, eyes: 0.08, tilt: 0.22, droop: 0.12 },
+  unknown: { color: 0x8892a8, mood: 0, eyes: 0.6, scan: 1 }
 };
+// Monitor y jefe quedan centrados en pantalla (antes caian debajo de los paneles laterales)
 const VIEWS = {
   overview: { pos: [0.9, 2.7, 8.6], look: [1.1, 1.1, 0] },
-  monitor: { pos: [0.5, 1.5, 3.4], look: [0.5, 1.3, 0] },
-  boss: { pos: [2.0, 1.8, 3.6], look: [2.0, 1.55, 0.2] }
+  monitor: { pos: [0, 1.7, 3.3], look: [0, 1.55, 0] },
+  boss: { pos: [2.6, 1.85, 4.0], look: [2.6, 1.6, 0.2] }
+};
+// Pantallas verticales (movil): mas lejos para que entren escritorio y jefe
+const VIEWS_NARROW = {
+  overview: { pos: [0.9, 3.2, 12], look: [0.9, 1.2, 0] },
+  monitor: { pos: [0, 1.7, 4.6], look: [0, 1.55, 0] },
+  boss: { pos: [2.6, 1.9, 5.6], look: [2.6, 1.75, 0.2] }
 };
 const SEGMENTS = 48;
 
@@ -26,6 +34,13 @@ export function createScene(canvas) {
   renderer.setClearColor(0x04060c);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
+
+  // Todos los listeners globales se registran con esta senal y se quitan juntos en dispose()
+  const ac = new AbortController();
+  const on = (t, ev, fn, opt = {}) => t.addEventListener(ev, fn, { ...opt, signal: ac.signal });
+  const rmq = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  let reduced = !!rmq?.matches;
+  if (rmq) on(rmq, 'change', (e) => { reduced = e.matches; });
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x04060c, 0.045);
@@ -69,8 +84,9 @@ export function createScene(canvas) {
   desk.position.set(0, 0.8, 0.1);
   scene.add(desk);
   const legGeo = new THREE.BoxGeometry(0.09, 0.8, 0.09);
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x0c0e14, metalness: 0.6, roughness: 0.4 }); // un solo material compartido
   for (const [x, z] of [[-1.7, -0.55], [1.7, -0.55], [-1.7, 0.75], [1.7, 0.75]]) {
-    const leg = new THREE.Mesh(legGeo, new THREE.MeshStandardMaterial({ color: 0x0c0e14, metalness: 0.6, roughness: 0.4 }));
+    const leg = new THREE.Mesh(legGeo, legMat);
     leg.position.set(x, 0.4, z);
     scene.add(leg);
   }
@@ -195,6 +211,7 @@ export function createScene(canvas) {
   confetti.visible = false; confetti.frustumCulled = false; scene.add(confetti);
   let confLife = 0;
   function burst() {
+    if (reduced) return; // sin confeti con movimiento reducido
     const col = new THREE.Color();
     for (let i = 0; i < CN; i++) {
       cPos[i * 3] = boss.position.x + (Math.random() - 0.5) * 0.4; cPos[i * 3 + 1] = boss.position.y + 0.2; cPos[i * 3 + 2] = boss.position.z + (Math.random() - 0.5) * 0.4;
@@ -225,7 +242,7 @@ export function createScene(canvas) {
     uniforms: { time: { value: 0 }, energy: { value: 0 }, color: { value: new THREE.Color(0x19ffa0) }, scale: { value: 300 } },
     vertexShader: `attribute float size; attribute float seed; uniform float time,energy,scale; varying float vA;
       void main(){ vec3 p=position; float e=.15+energy*1.6;
-        p.x+=sin(time*.4*e+seed)*.5*e; p.y+=sin(time*.3*e+seed*1.7)*.4*e+mod(time*.05*(1.+energy*4.)+seed,5.)*.0;
+        p.x+=sin(time*.4*e+seed)*.5*e; p.y+=sin(time*.3*e+seed*1.7)*.4*e;
         p.z+=cos(time*.35*e+seed*.6)*.5*e;
         vec4 mv=modelViewMatrix*vec4(p,1.); gl_Position=projectionMatrix*mv;
         gl_PointSize=size*scale/-mv.z; vA=.25+.55*fract(seed); }`,
@@ -236,14 +253,16 @@ export function createScene(canvas) {
   scene.add(points);
 
   // ---------- Estado y animacion ----------
-  let level = 1, auto = true, lastLevelChange = 0, fps = 60, accStats = 0, paused = false, raf = 0;
-  let camTex = null, camCanvas = null, camCtx = null, view = 'overview';
-  const target = { color: new THREE.Color(0x8892a8), mood: 0, eyes: 0.6 };
-  const cur = { color: new THREE.Color(0x8892a8), mood: 0, eyes: 0.6, energy: 0, shake: 0 };
-  let st = { motion: 0, mood: 'unknown', score: 0, flash: false, camLive: false };
+  let level = 1, auto = true, lastLevelChange = 0, fps = 60, accStats = 0, paused = document.hidden, lost = false, raf = 0;
+  let upFails = 0, lastUpgrade = 0, nextBlink = 2, blinkT = 0;
+  let camTex = null, camCanvas = null, camCtx = null, view = 'overview', narrow = false, firstAim = true;
+  const target = { color: new THREE.Color(0x8892a8), mood: 0, eyes: 0.6, tilt: 0, droop: 0, scan: 1 };
+  const cur = { color: new THREE.Color(0x8892a8), mood: 0, eyes: 0.6, energy: 0, shake: 0, tilt: 0, droop: 0, scan: 1 };
+  const st = { motion: 0, mood: 'unknown', score: 0, flash: false, camLive: false, fx: null };
   let lastLit = -1, lastRingColor = -1, keyTimer = 0, lastRender = 0;
   const mouse = new THREE.Vector2();
-  const statsCbs = [];
+  const statsCbs = [], viewCbs = [];
+  const emitStats = () => statsCbs.forEach((cb) => cb({ fps, level, auto }));
 
   function applyLevel(l) {
     level = Math.max(0, Math.min(QUALITY.length - 1, l));
@@ -251,7 +270,7 @@ export function createScene(canvas) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, QUALITY[level].pr));
     pGeo.setDrawRange(0, QUALITY[level].particles);
     resize();
-    statsCbs.forEach((cb) => cb({ fps, level, auto }));
+    emitStats();
   }
 
   function resize() {
@@ -261,9 +280,12 @@ export function createScene(canvas) {
     // en pantallas angostas alejamos la camara para que entre la escena
     camera.fov = w / h < 1 ? 62 : 42;
     camera.updateProjectionMatrix();
-    pMat.uniforms.scale.value = (h * (window.devicePixelRatio ? Math.min(window.devicePixelRatio, QUALITY[level].pr) : 1)) * 0.055;
+    const n = w / h < 0.8;
+    if (n !== narrow) { narrow = n; aimView(); }
+    pMat.uniforms.scale.value = h * Math.min(window.devicePixelRatio || 1, QUALITY[level].pr) * 0.055;
   }
-  new ResizeObserver(resize).observe(canvas);
+  const ro = new ResizeObserver(resize);
+  ro.observe(canvas);
 
   function setRing(score, color) {
     const lit = Math.round((score / 100) * SEGMENTS);
@@ -275,8 +297,8 @@ export function createScene(canvas) {
   }
 
   function frame(now) {
+    if (paused || lost) { raf = 0; return; } // sin rAF mientras la pestana esta oculta o sin contexto
     raf = requestAnimationFrame(frame);
-    if (paused) return;
     const cap = 1000 / QUALITY[level].fps;
     if (now - lastRender < cap - 2) return;
     const dt = Math.min((now - (lastRender || now)) / 1000, 0.1);
@@ -284,15 +306,21 @@ export function createScene(canvas) {
     const t = now / 1000;
     if (dt > 0) fps = fps * 0.95 + (1 / dt) * 0.05;
 
-    // adaptacion de calidad
+    // adaptacion de calidad: umbrales relativos al tope del nivel (Eco va a 30 fps y antes nunca podia volver a subir)
     accStats += dt;
     if (accStats > 2) {
       accStats = 0;
       if (auto) {
-        if (fps < 38 && level < QUALITY.length - 1) applyLevel(level + 1);
-        else if (fps > 57 && level > 0 && now - lastLevelChange > 15000) applyLevel(level - 1);
+        const capFps = QUALITY[level].fps;
+        if (fps < capFps * 0.63 && level < QUALITY.length - 1) {
+          if (now - lastUpgrade < 8000) upFails = Math.min(upFails + 1, 5); // la subida no aguanto: esperar mas la proxima vez
+          applyLevel(level + 1);
+        } else if (fps > capFps * 0.95 && level > 0 && now - lastLevelChange > 15000 * 2 ** upFails) {
+          lastUpgrade = now;
+          applyLevel(level - 1);
+        }
       }
-      statsCbs.forEach((cb) => cb({ fps, level, auto }));
+      emitStats();
     }
 
     // mood suavizado
@@ -301,7 +329,12 @@ export function createScene(canvas) {
     cur.mood += (target.mood - cur.mood) * k;
     cur.eyes += (target.eyes - cur.eyes) * Math.min(1, k * 2);
     cur.energy += (Math.min(st.motion / 40, 1) - cur.energy) * k;
-    cur.shake = st.mood === 'distracted' ? 1 : cur.shake * (1 - k);
+    // antes el temblor seguia a amplitud completa minutos despues de dejar de estar distraido
+    cur.shake = st.mood === 'distracted' && !reduced ? 1 : cur.shake * (1 - k);
+    if (cur.shake < 0.002) cur.shake = 0;
+    cur.tilt += (target.tilt - cur.tilt) * k;
+    cur.droop += (target.droop - cur.droop) * k;
+    cur.scan += (target.scan - cur.scan) * k;
 
     faceMat.color.copy(cur.color);
     head.material.emissive.copy(cur.color);
@@ -309,29 +342,42 @@ export function createScene(canvas) {
     bossLight.color.copy(cur.color);
     pMat.uniforms.color.value.copy(cur.color);
     screenMat.uniforms.tint.value.copy(cur.color);
-    eyeL.scale.y = eyeR.scale.y = Math.max(0.08, cur.eyes);
+
+    // parpadeo natural cada 2.5-6 s (no cuando duerme)
+    if (t > nextBlink) { blinkT = 0.16; nextBlink = t + 2.5 + Math.random() * 3.5; }
+    let blink = 1;
+    if (blinkT > 0) { blinkT -= dt; blink = Math.min(1, Math.abs(blinkT / 0.08 - 1)); }
+    eyeL.scale.y = eyeR.scale.y = Math.max(0.06, cur.eyes * (cur.eyes > 0.2 ? blink : 1));
+    // los ojos siguen al puntero; sin datos "buscan" de lado a lado
+    const lookX = THREE.MathUtils.clamp(mouse.x * 0.05 + cur.scan * Math.sin(t * 1.4) * 0.06, -0.07, 0.07);
+    const lookY = THREE.MathUtils.clamp(mouse.y * 0.03, -0.04, 0.04);
+    eyeL.position.set(-0.2 + lookX, 0.08 + lookY, 0.5); eyeR.position.set(0.2 + lookX, 0.08 + lookY, 0.5);
+
     const brow = -cur.mood; // enojado: ceja interior hacia abajo
     browL.rotation.z = -brow * 0.45; browR.rotation.z = brow * 0.45;
     browL.position.y = browR.position.y = 0.27 - brow * 0.04;
     mouth.rotation.z = cur.mood >= 0 ? Math.PI : 0;
     mouth.scale.set(1, 0.25 + Math.abs(cur.mood) * 0.9, 1);
     mouth.position.y = cur.mood >= 0 ? -0.12 : -0.28;
-    boss.position.y = 1.55 + Math.sin(t * 1.3) * 0.06;
-    wire.rotation.y = t * 0.2;
-    boss.rotation.y = Math.sin(t * 0.5) * 0.15 + mouse.x * 0.35 + (cur.shake ? Math.sin(t * 40) * 0.05 : 0);
-    boss.rotation.x = -mouse.y * 0.2;
-    head.material.emissiveIntensity = 0.2 + cur.energy * 0.3 + (cur.shake ? 0.25 + Math.sin(t * 30) * 0.15 : 0);
-    setRing(st.score, new THREE.Color().copy(cur.color));
+
+    const mk = reduced ? 0.25 : 1;
+    boss.position.y = 1.55 + Math.sin(t * 1.3) * 0.06 * mk - cur.droop;
+    wire.rotation.y = t * 0.2 * mk;
+    boss.rotation.y = Math.sin(t * 0.5) * 0.15 * mk + mouse.x * 0.35 + cur.shake * Math.sin(t * 40) * 0.05;
+    boss.rotation.x = -mouse.y * 0.2 + cur.droop * 0.8;
+    boss.rotation.z = cur.tilt * (0.5 + Math.sin(t * 0.35) * mk);
+    head.material.emissiveIntensity = 0.2 + cur.energy * 0.3 + cur.shake * (0.25 + Math.sin(t * 30) * 0.15);
+    setRing(st.score, cur.color);
 
     // efectos: rabia (late y brilla), sueno (Zzz) y confeti
     const rage = st.fx === 'rage';
-    const sc = 1 + (rage ? 0.07 * Math.sin(t * 16) : 0);
+    const sc = 1 + (rage && !reduced ? 0.07 * Math.sin(t * 16) : 0);
     boss.scale.setScalar(boss.scale.x + (sc - boss.scale.x) * 0.3);
-    bossLight.intensity = 14 + (rage ? 26 + 10 * Math.sin(t * 20) : 0);
+    bossLight.intensity = 14 + (rage ? 26 + (reduced ? 0 : 10 * Math.sin(t * 20)) : 0);
     const sleeping = st.fx === 'sleep';
     zzz.forEach((z, i) => {
       z.visible = sleeping;
-      if (sleeping) { const ph = (t * 0.4 + i / 3) % 1; z.position.set(0.55 + ph * 0.4, 0.45 + ph * 0.9, 0.3); z.material.opacity = Math.sin(ph * Math.PI); z.scale.setScalar(0.22 + ph * 0.25); }
+      if (sleeping) { const ph = (t * 0.4 * mk + i / 3) % 1; z.position.set(0.55 + ph * 0.4, 0.45 + ph * 0.9, 0.3); z.material.opacity = Math.sin(ph * Math.PI); z.scale.setScalar(0.22 + ph * 0.25); }
     });
     if (confLife > 0) {
       confLife -= dt;
@@ -347,11 +393,11 @@ export function createScene(canvas) {
     // pantalla
     screenMat.uniforms.time.value = t;
     screenMat.uniforms.live.value += ((st.camLive ? 1 : 0) - screenMat.uniforms.live.value) * k;
-    screenMat.uniforms.noise.value = st.camLive ? 0.025 : 0.9;
+    screenMat.uniforms.noise.value = st.camLive ? 0.025 : (reduced ? 0.5 : 0.9);
     screenMat.uniforms.flash.value = st.flash ? 1 : 0;
     lamp.intensity = st.flash ? 90 : 30;
-    pMat.uniforms.time.value = t;
-    pMat.uniforms.energy.value = cur.energy;
+    pMat.uniforms.time.value = reduced ? t * 0.3 : t;
+    pMat.uniforms.energy.value = reduced ? cur.energy * 0.3 : cur.energy;
 
     // teclas reactivas (10 Hz)
     keyTimer += dt;
@@ -363,39 +409,57 @@ export function createScene(canvas) {
       keysMesh.instanceColor.needsUpdate = true;
     }
 
-    // camara con transicion + paralaje
-    camPos.lerp(wantPos, 1 - Math.exp(-dt * 3));
-    camLook.lerp(wantLook, 1 - Math.exp(-dt * 3));
-    camera.position.set(camPos.x + mouse.x * 0.35, camPos.y + mouse.y * 0.18, camPos.z);
+    // camara con transicion + paralaje (instantanea con movimiento reducido)
+    const camK = reduced ? 1 : 1 - Math.exp(-dt * 3);
+    camPos.lerp(wantPos, camK);
+    camLook.lerp(wantLook, camK);
+    const par = reduced ? 0.1 : 1;
+    camera.position.set(camPos.x + mouse.x * 0.35 * par, camPos.y + mouse.y * 0.18 * par, camPos.z);
     camera.lookAt(camLook);
 
     renderer.render(scene, camera);
   }
 
-  // interaccion
-  const ray = new THREE.Raycaster();
-  window.addEventListener('pointermove', (e) => {
-    mouse.set((e.clientX / innerWidth) * 2 - 1, -((e.clientY / innerHeight) * 2 - 1));
-  });
-  canvas.addEventListener('pointerdown', (e) => {
-    ray.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -((e.clientY / innerHeight) * 2 - 1)), camera);
-    const hit = ray.intersectObjects([bezel, head], false)[0];
-    if (hit) setView(hit.object === head ? 'boss' : 'monitor');
-    else setView('overview');
-  });
-  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); paused = true; });
-  canvas.addEventListener('webglcontextrestored', () => { paused = false; });
-  document.addEventListener('visibilitychange', () => { paused = document.hidden; lastRender = 0; });
+  function start() { if (!raf && !paused && !lost) { lastRender = 0; raf = requestAnimationFrame(frame); } }
 
+  // ---------- Interaccion ----------
+  const ray = new THREE.Raycaster();
+  const ndc = new THREE.Vector2();
+  let downAt = null;
+  on(window, 'pointermove', (e) => {
+    if (e.pointerType === 'touch') return; // en tactil el paralaje no salta con cada toque
+    mouse.set((e.clientX / innerWidth) * 2 - 1, -((e.clientY / innerHeight) * 2 - 1));
+  }, { passive: true });
+  on(canvas, 'pointerdown', (e) => { downAt = { x: e.clientX, y: e.clientY }; });
+  on(canvas, 'pointerup', (e) => {
+    // solo un toque/clic corto (no un arrastre) cambia la vista
+    const d = downAt; downAt = null;
+    if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8) return;
+    ndc.set((e.clientX / innerWidth) * 2 - 1, -((e.clientY / innerHeight) * 2 - 1));
+    ray.setFromCamera(ndc, camera);
+    const hit = ray.intersectObjects([bezel, screen, head], false)[0];
+    setView(hit ? (hit.object === head ? 'boss' : 'monitor') : 'overview');
+  });
+  on(canvas, 'webglcontextlost', (e) => { e.preventDefault(); lost = true; });
+  on(canvas, 'webglcontextrestored', () => { lost = false; applyLevel(level); start(); });
+  on(document, 'visibilitychange', () => { paused = document.hidden; start(); });
+
+  function aimView() {
+    const v = (narrow ? VIEWS_NARROW : VIEWS)[view];
+    wantPos.set(...v.pos);
+    wantLook.set(...v.look);
+    if (firstAim) { camPos.copy(wantPos); camLook.copy(wantLook); } // al cargar, sin viaje de camara
+  }
   function setView(name) {
     if (!VIEWS[name]) return;
     view = name;
-    wantPos.set(...VIEWS[name].pos);
-    wantLook.set(...VIEWS[name].look);
+    aimView();
+    viewCbs.forEach((cb) => cb(name));
   }
 
   applyLevel(1);
-  raf = requestAnimationFrame(frame);
+  firstAim = false;
+  start();
 
   return {
     setView,
@@ -406,11 +470,12 @@ export function createScene(canvas) {
       return { x: (projV.x * 0.5 + 0.5) * canvas.clientWidth, y: (-projV.y * 0.5 + 0.5) * canvas.clientHeight, visible: projV.z > -1 && projV.z < 1 };
     },
     setQuality(l) { // 'auto' o 0..3
-      if (l === 'auto') { auto = true; return; }
+      if (l === 'auto') { auto = true; upFails = 0; emitStats(); return; }
       auto = false;
       applyLevel(l);
     },
-    onStats(cb) { statsCbs.push(cb); },
+    onStats(cb) { statsCbs.push(cb); cb({ fps, level, auto }); },
+    onView(cb) { viewCbs.push(cb); },
     setCameraImage(img) {
       // Se copia cada cuadro a un canvas propio: el <img> queda "incompleto" mientras llega el siguiente
       const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
@@ -430,12 +495,25 @@ export function createScene(canvas) {
       camTex.needsUpdate = true;
     },
     update(s) {
-      st = { ...st, ...s };
+      Object.assign(st, s);
       const m = MOODS[st.mood] || MOODS.unknown;
       target.color.setHex(m.color);
       target.mood = m.mood;
       target.eyes = m.eyes;
+      target.tilt = m.tilt || 0;
+      target.droop = m.droop || 0;
+      target.scan = m.scan || 0;
     },
-    dispose() { cancelAnimationFrame(raf); renderer.dispose(); }
+    dispose() {
+      cancelAnimationFrame(raf); raf = 0; paused = true;
+      ac.abort(); ro.disconnect();
+      scene.traverse((o) => {
+        o.geometry?.dispose();
+        const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+        for (const mt of mats) { mt.map?.dispose(); mt.dispose(); }
+      });
+      camTex?.dispose(); blank.dispose();
+      renderer.dispose();
+    }
   };
 }

@@ -3,31 +3,38 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Panel 3D del Jefe IoT: un jefe virtual vigila tu escritorio con una ESP32-CAM.">
+<meta name="theme-color" content="#04060c">
+<meta name="color-scheme" content="dark">
 <title>Jefe IoT</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%2319ffa0'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 </head>
-<body>
-<canvas id="gl"></canvas>
-<div id="bubble" hidden></div>
+<body class="tab-left">
+<canvas id="gl" aria-label="Escena 3D: escritorio, monitor con la cámara y el jefe holográfico. Toca el monitor o el jefe para acercarte." role="img"></canvas>
+<div id="bubble" aria-hidden="true"></div>
+<div id="nogl" class="nogl" hidden>
+  <b>Sin escena 3D</b>
+  <span>Tu navegador no pudo iniciar WebGL. El panel sigue funcionando: datos, cámara y control están en las tarjetas.</span>
+</div>
 
 <div id="hud">
   <header id="top">
-    <div class="brand"><span class="dot"></span>JEFE<b>·</b>IOT</div>
-    <div class="chips">
-      <span class="chip" id="chip-ble"><i></i>BLE</span>
-      <span class="chip" id="chip-wifi"><i></i>WiFi</span>
-      <span class="chip" id="chip-mqtt"><i></i>MQTT</span>
-      <span class="chip" id="chip-cam"><i></i>Cámara</span>
-    </div>
+    <div class="brand"><span class="dot" aria-hidden="true"></span>JEFE<b>·</b>IOT</div>
+    <ul class="chips" aria-label="Estado de las conexiones">
+      <li class="chip" id="chip-ble" tabindex="0"><i aria-hidden="true"></i><span>BLE</span></li>
+      <li class="chip" id="chip-wifi" tabindex="0"><i aria-hidden="true"></i><span>WiFi</span></li>
+      <li class="chip" id="chip-mqtt" tabindex="0"><i aria-hidden="true"></i><span>Servidor</span></li>
+      <li class="chip" id="chip-cam" tabindex="0"><i aria-hidden="true"></i><span>Cámara</span></li>
+    </ul>
     <div class="tools">
-      <div class="seg" id="views">
-        <button data-view="overview" class="on">Vista</button>
-        <button data-view="monitor">Monitor</button>
-        <button data-view="boss">Jefe</button>
+      <div class="seg" id="views" role="group" aria-label="Vista de la cámara 3D">
+        <button type="button" data-view="overview" aria-pressed="true">Vista</button>
+        <button type="button" data-view="monitor" aria-pressed="false">Monitor</button>
+        <button type="button" data-view="boss" aria-pressed="false">Jefe</button>
       </div>
-      <a id="lnk-graf" class="btnlink" href="#" target="_blank" rel="noopener">Gráficas (Grafana)</a>
+      <a id="lnk-graf" class="btn primary small" href="#" target="_blank" rel="noopener">Gráficas<span class="hide-sm">(Grafana)</span></a>
       <label class="sel">Calidad
         <select id="quality">
           <option value="auto" selected>Auto</option>
@@ -37,103 +44,116 @@
           <option value="3">Eco</option>
         </select>
       </label>
-      <span id="fps" class="mono">-- fps</span>
+      <span id="fps" class="mono" aria-hidden="true">-- fps</span>
     </div>
   </header>
 
-  <nav id="tabs">
-    <button data-tab="left" class="on">Conexión</button>
-    <button data-tab="right">Jefe</button>
+  <nav id="tabs" role="tablist" aria-label="Secciones">
+    <button type="button" role="tab" id="tab-left" data-tab="left" aria-controls="left" aria-selected="true">Conexión</button>
+    <button type="button" role="tab" id="tab-scene" data-tab="scene" aria-selected="false">Escena</button>
+    <button type="button" role="tab" id="tab-right" data-tab="right" aria-controls="right" aria-selected="false">Jefe</button>
   </nav>
 
-  <aside id="left" class="panel-col">
-    <section class="card" id="mq-login" hidden>
+  <aside id="left" class="panel-col" role="tabpanel" aria-labelledby="tab-left">
+    <form class="card" id="mq-login" hidden>
       <h2>Acceso al servidor</h2>
-      <div id="mq-msg" class="msg info">Entra con el usuario del panel para ver los datos y la cámara.</div>
-      <input id="mq-user" type="text" placeholder="Usuario" autocomplete="username">
-      <input id="mq-pass" type="password" placeholder="Clave" autocomplete="current-password">
-      <button id="mq-go" class="primary">Entrar</button>
+      <div id="mq-msg" class="msg info" role="status">Entra con el usuario del panel para ver los datos y la cámara.</div>
+      <label class="field"><span class="lbl">Usuario</span><input id="mq-user" type="text" autocomplete="username" required></label>
+      <label class="field"><span class="lbl">Clave</span><input id="mq-pass" type="password" autocomplete="current-password"></label>
+      <button id="mq-go" class="primary" type="submit">Entrar</button>
+    </form>
+
+    <section class="card" aria-labelledby="h-conn">
+      <h2 id="h-conn">Estado de la conexión</h2>
+      <dl class="conn" id="conn">
+        <div data-k="ble"><dt><i aria-hidden="true"></i>Bluetooth</dt><dd>--</dd></div>
+        <div data-k="wifi"><dt><i aria-hidden="true"></i>WiFi de la placa</dt><dd>--</dd></div>
+        <div data-k="mqtt"><dt><i aria-hidden="true"></i>Servidor MQTT</dt><dd>--</dd></div>
+        <div data-k="cam"><dt><i aria-hidden="true"></i>Cámara</dt><dd>--</dd></div>
+      </dl>
     </section>
 
-    <section class="card">
-      <h2>Conexión de la placa</h2>
-      <div id="support" class="msg err" hidden></div>
+    <section class="card" aria-labelledby="h-board">
+      <h2 id="h-board">Conexión de la placa</h2>
+      <div id="support" class="msg err" role="alert" hidden></div>
       <div class="row">
-        <button id="btn-ble" class="primary">Conectar por Bluetooth</button>
-        <button id="btn-ble-off" class="ghost" hidden>Desconectar</button>
+        <button id="btn-ble" class="primary grow" type="button">Conectar por Bluetooth</button>
+        <button id="btn-ble-off" class="ghost" type="button" hidden>Desconectar</button>
       </div>
-      <div id="ble-info" class="hint">Enciende la ESP32-CAM, acércala al PC y pulsa conectar. Aparecerá como <b>JefeCAM</b>.</div>
+      <p id="ble-info" class="hint" aria-live="polite">Enciende la ESP32-CAM, acércala al PC y pulsa conectar. Aparecerá como <b>JefeCAM</b>.</p>
 
       <div id="prov" class="stack" hidden>
         <div class="row between">
-          <label class="lbl">Red WiFi (2.4 GHz)</label>
-          <button id="btn-scan" class="ghost small">Buscar redes</button>
+          <label class="lbl" for="ssid">Red WiFi (2.4 GHz)</label>
+          <button id="btn-scan" class="ghost small" type="button">Buscar redes</button>
         </div>
-        <ul id="nets" class="nets" hidden></ul>
+        <ul id="nets" class="nets" aria-label="Redes encontradas" hidden></ul>
         <input id="ssid" type="text" placeholder="Nombre de la red" autocomplete="off" maxlength="32">
         <div class="pw">
-          <input id="pass" type="password" placeholder="Clave" autocomplete="off" maxlength="63">
-          <button id="btn-eye" class="ghost small" type="button" aria-label="Mostrar clave">Ver</button>
+          <input id="pass" type="password" placeholder="Clave WiFi" autocomplete="off" maxlength="63" aria-label="Clave WiFi">
+          <button id="btn-eye" class="ghost small" type="button" aria-pressed="false" aria-label="Mostrar clave">Ver</button>
         </div>
         <div class="grid2">
-          <div><label class="lbl">Servidor MQTT (dominio o IP)</label><input id="mqtt" type="text" placeholder="mqtt.tudominio.com" autocomplete="off"></div>
-          <div><label class="lbl">Puerto</label><input id="port" type="number" value="1883" min="1" max="65535"></div>
+          <label class="field"><span class="lbl">Servidor MQTT (dominio o IP)</span><input id="mqtt" type="text" placeholder="mqtt.tudominio.com" autocomplete="off" inputmode="url"></label>
+          <label class="field"><span class="lbl">Puerto</span><input id="port" type="number" value="1883" min="1" max="65535" inputmode="numeric"></label>
         </div>
         <div class="grid2">
-          <div><label class="lbl">Usuario MQTT de la placa</label><input id="muser" type="text" placeholder="esp32" autocomplete="off"></div>
-          <div><label class="lbl">Clave MQTT de la placa</label><input id="mpass" type="password" placeholder="clave" autocomplete="off"></div>
+          <label class="field"><span class="lbl">Usuario MQTT de la placa</span><input id="muser" type="text" placeholder="esp32" autocomplete="off"></label>
+          <label class="field"><span class="lbl">Clave MQTT de la placa</span><input id="mpass" type="password" placeholder="clave" autocomplete="off"></label>
         </div>
         <label class="tog"><input type="checkbox" id="mtls"><span>Cifrar con TLS (obligatorio en el VPS, puerto 443)</span></label>
-        <button id="btn-send" class="primary">Enviar a la placa</button>
-        <div id="prov-msg" class="msg" hidden></div>
+        <button id="btn-send" class="primary" type="button">Enviar a la placa</button>
+        <div id="prov-msg" class="msg" role="status" hidden></div>
         <details class="adv">
           <summary>Recuperación y avanzado</summary>
           <div class="grid2">
-            <button class="ghost small" data-cmd="retry">Reintentar WiFi</button>
-            <button class="ghost small" data-cmd="camera">Reiniciar cámara</button>
-            <button class="ghost small" data-cmd="forget">Olvidar WiFi</button>
-            <button class="ghost small" data-cmd="reboot">Reiniciar placa</button>
+            <button class="ghost small" type="button" data-cmd="retry">Reintentar WiFi</button>
+            <button class="ghost small" type="button" data-cmd="camera">Reiniciar cámara</button>
+            <button class="ghost small" type="button" data-cmd="forget" data-confirm="1">Olvidar WiFi</button>
+            <button class="ghost small" type="button" data-cmd="reboot" data-confirm="1">Reiniciar placa</button>
           </div>
-          <button class="danger small" data-cmd="factory" id="btn-factory">Restaurar de fábrica</button>
+          <button class="danger small" type="button" data-cmd="factory" data-confirm="1" id="btn-factory">Restaurar de fábrica</button>
         </details>
       </div>
 
-      <label class="lbl">IP de la cámara en la red (se detecta sola)</label>
-      <div class="row"><input id="ip" type="text" placeholder="192.168.x.x" autocomplete="off"><button id="btn-ip" class="ghost small">Usar</button></div>
-      <div id="diag" class="msg warn" hidden></div>
+      <label class="lbl" for="ip">IP de la cámara en la red (se detecta sola)</label>
+      <div class="row"><input id="ip" type="text" placeholder="192.168.x.x" autocomplete="off" inputmode="url"><button id="btn-ip" class="ghost small" type="button">Usar</button></div>
+      <div id="diag" class="msg warn" role="status" hidden></div>
     </section>
   </aside>
 
-  <aside id="right" class="panel-col">
-    <section class="card boss-card">
-      <h2>El Jefe</h2>
-      <div class="row between"><div id="boss-state" class="big">SIN DATOS</div><div id="score-num" class="mono big">0</div></div>
-      <div class="bar"><div id="score-bar"></div></div>
-      <div id="boss-say" class="say">Conecta mi ojo para vigilarte.</div>
+  <aside id="right" class="panel-col" role="tabpanel" aria-labelledby="tab-right">
+    <section class="card boss-card" aria-labelledby="h-boss">
+      <h2 id="h-boss">El Jefe</h2>
+      <div class="row between"><div id="boss-state" class="big" data-st="unknown">SIN DATOS</div><div class="mono big"><span id="score-num">0</span><small class="unit">/100</small></div></div>
+      <div class="bar" role="progressbar" id="score-pb" aria-label="Puntaje de productividad" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="score-bar"></div></div>
+      <p id="srv-boss" class="hint" hidden></p>
+      <p id="boss-say" class="say" aria-live="polite">Conecta mi ojo para vigilarte.</p>
       <div class="row wrap">
         <label class="tog"><input type="checkbox" id="b-voice"><span>Voz del jefe</span></label>
         <label class="tog"><input type="checkbox" id="b-sound"><span>Sonidos y alarma</span></label>
       </div>
 
-      <div class="pomo">
-        <div class="row between"><span id="pomo-mode" class="lbl">Pomodoro</span><span id="pomo-time" class="mono big">25:00</span></div>
+      <div class="pomo" id="pomo">
+        <div class="row between"><span id="pomo-mode" class="lbl" aria-live="polite">Pomodoro</span><span id="pomo-time" class="mono big">25:00</span></div>
+        <div class="bar thin" aria-hidden="true"><div id="pomo-bar"></div></div>
         <div class="row wrap">
-          <button id="pomo-go" class="primary small">Iniciar</button>
-          <button id="pomo-pause" class="ghost small">Pausa</button>
-          <button id="pomo-reset" class="ghost small">Reiniciar</button>
-          <select id="pomo-cfg" aria-label="Duracion del pomodoro"><option value="25-5" selected>25 + 5</option><option value="15-3">15 + 3</option><option value="50-10">50 + 10</option><option value="1-1">1 + 1 (prueba)</option></select>
+          <button id="pomo-go" class="primary small" type="button">Iniciar</button>
+          <button id="pomo-pause" class="ghost small" type="button" disabled>Pausa</button>
+          <button id="pomo-reset" class="ghost small" type="button" disabled>Reiniciar</button>
+          <select id="pomo-cfg" aria-label="Duración del pomodoro"><option value="25-5" selected>25 + 5</option><option value="15-3">15 + 3</option><option value="50-10">50 + 10</option><option value="1-1">1 + 1 (prueba)</option></select>
         </div>
         <div id="pomo-stats" class="hint"></div>
       </div>
 
       <div class="chatbox">
-        <div id="chat-log" class="chat"></div>
-        <form id="chat-form" class="row"><input id="chat-in" type="text" placeholder="Dile una excusa al jefe..." autocomplete="off" maxlength="120"><button class="ghost small" type="submit">Enviar</button></form>
+        <div id="chat-log" class="chat" role="log" aria-label="Conversación con el jefe" aria-live="polite"></div>
+        <form id="chat-form" class="row"><input id="chat-in" type="text" placeholder="Dile una excusa al jefe..." autocomplete="off" maxlength="120" aria-label="Tu excusa"><button class="ghost small" type="submit">Enviar</button></form>
       </div>
     </section>
 
-    <section class="card">
-      <h2>Tu día</h2>
+    <section class="card" aria-labelledby="h-day">
+      <h2 id="h-day">Tu día</h2>
       <div class="metrics">
         <div><span>Enfocado</span><b id="day-f" class="mono">0 min</b></div>
         <div><span>Distraído</span><b id="day-d" class="mono">0 min</b></div>
@@ -142,14 +162,15 @@
         <div><span>Mejor racha</span><b id="day-best" class="mono">0 min</b></div>
         <div><span>Distracciones</span><b id="day-dists" class="mono">0</b></div>
       </div>
-      <span class="lbl">Horas del día (verde enfocado, rojo distraído, azul ausente)</span>
-      <canvas id="day-hours" width="300" height="70"></canvas>
+      <div class="legend" aria-hidden="true"><span class="lg f">Enfocado</span><span class="lg d">Distraído</span><span class="lg a">Ausente</span></div>
+      <span class="lbl">Minutos por hora</span>
+      <canvas id="day-hours" class="chart" style="height:70px" role="img" aria-label="Minutos enfocado, distraído y ausente por hora del día"></canvas>
       <span class="lbl">Línea de tiempo de hoy</span>
-      <canvas id="day-line" width="300" height="34"></canvas>
+      <canvas id="day-line" class="chart" style="height:34px" role="img" aria-label="Línea de tiempo del estado durante el día"></canvas>
     </section>
 
-    <section class="card">
-      <h2>Telemetría</h2>
+    <section class="card" aria-labelledby="h-tele">
+      <div class="row between"><h2 id="h-tele">Telemetría</h2><span id="sim-badge" class="badge warn" title="El servidor simula la telemetría mientras la placa real no envía datos" hidden>SIMULADA</span></div>
       <div class="metrics">
         <div><span>Movimiento</span><b id="m-motion" class="mono">--</b></div>
         <div><span>Brillo</span><b id="m-bright" class="mono">--</b></div>
@@ -158,28 +179,34 @@
         <div><span>Chip</span><b id="m-temp" class="mono">--</b></div>
         <div><span>Encendida</span><b id="m-up" class="mono">--</b></div>
       </div>
-      <canvas id="spark" width="300" height="56"></canvas>
+      <canvas id="spark" class="chart" style="height:56px" role="img" aria-label="Movimiento de los últimos minutos"></canvas>
+      <p id="tele-age" class="hint">Sin telemetría todavía.</p>
     </section>
 
-    <section class="card">
-      <h2>Dispositivos (retroceso)</h2>
-      <div id="devs" class="devs"><span class="hint">Esperando al servidor...</span></div>
+    <section class="card" aria-labelledby="h-devs">
+      <h2 id="h-devs">Dispositivos (retroceso)</h2>
+      <div id="devs" class="devs" aria-live="polite"><p class="empty">Conectando al servidor...</p></div>
     </section>
 
-    <section class="card">
-      <h2>Control remoto de la ESP32-CAM</h2>
-      <label class="tog"><input type="checkbox" id="c-flash"><span>Flash LED</span></label>
-      <label class="tog"><input type="checkbox" id="c-enabled" checked><span>Detección de movimiento</span></label>
-      <label class="rng">Sensibilidad <output id="o-gain">4.0</output><input type="range" id="c-gain" min="0.5" max="12" step="0.5" value="4"></label>
-      <label class="rng">Intervalo de envío <output id="o-int">10 s</output><input type="range" id="c-int" min="1" max="60" step="1" value="10"></label>
-      <label class="rng">Calidad JPEG (menor = mejor) <output id="o-q">12</output><input type="range" id="c-q" min="10" max="40" step="1" value="12"></label>
-      <label class="rng">Cuadros por segundo del panel <output id="o-fps">6</output><input type="range" id="c-fps" min="1" max="15" step="1" value="6"></label>
-      <div class="row"><button class="ghost small" id="btn-reboot">Reiniciar placa</button></div>
+    <section class="card" aria-labelledby="h-remote">
+      <h2 id="h-remote">Control remoto de la ESP32-CAM</h2>
+      <p id="remote-hint" class="msg warn" hidden>Sin conexión al servidor: los controles se activan al conectar.</p>
+      <fieldset id="remote" class="stack plain">
+        <label class="tog"><input type="checkbox" id="c-flash"><span>Flash LED</span></label>
+        <label class="tog"><input type="checkbox" id="c-enabled" checked><span>Detección de movimiento</span></label>
+        <label class="rng"><span>Sensibilidad</span> <output id="o-gain">4.0</output><input type="range" id="c-gain" min="0.5" max="12" step="0.5" value="4"></label>
+        <label class="rng"><span>Intervalo de envío</span> <output id="o-int">10 s</output><input type="range" id="c-int" min="1" max="60" step="1" value="10"></label>
+        <label class="rng"><span>Calidad JPEG (menor = mejor)</span> <output id="o-q">12</output><input type="range" id="c-q" min="10" max="40" step="1" value="12"></label>
+        <div class="row"><button class="ghost small" type="button" id="btn-reboot">Reiniciar placa</button></div>
+      </fieldset>
+      <label class="rng"><span>Cuadros por segundo del panel</span> <output id="o-fps">6</output><input type="range" id="c-fps" min="1" max="15" step="1" value="6"></label>
     </section>
   </aside>
 
-  <footer id="log" class="mono"></footer>
+  <footer id="log" class="mono" role="log" aria-label="Registro de eventos"></footer>
 </div>
+
+<div id="toasts" class="toasts" aria-live="polite" aria-relevant="additions"></div>
 
 <script src="vendor/mqtt.min.js"></script>
 <script type="module" src="js/app.js"></script>

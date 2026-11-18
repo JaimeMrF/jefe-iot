@@ -77,13 +77,35 @@ function pickFrom(key, arr) {
 }
 const hourNow = () => new Date().getHours() + new Date().getMinutes() / 60;
 
+// Ajusta el buffer de un canvas a su tamano CSS y a la densidad de pixeles (graficas nitidas, sin estirarse).
+// Devuelve { ctx, w, h } en pixeles CSS, o null si el canvas no se ve (p. ej. pestana oculta en movil).
+export function fitCanvas(cv) {
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return null;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = Math.round(w * dpr), H = Math.round(h * dpr);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  return { ctx, w, h };
+}
+
 export function createBossUI($, scene, log) {
   // ---------- Voz y sonido ----------
+  const synth = window.speechSynthesis; // puede no existir (Firefox Android, webviews)
   let voiceOn = store.get('voice') === '1', soundOn = store.get('sound') === '1';
   let ac = null;
-  const audio = () => { ac ||= new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); return ac; };
+  const audio = () => {
+    try {
+      ac ||= new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === 'suspended') ac.resume().catch(() => {});
+    } catch { ac = null; }
+    return ac;
+  };
   const tone = (f, t0, dur, type = 'sine', vol = 0.14) => {
-    const a = audio(), o = a.createOscillator(), g = a.createGain(), T = a.currentTime + t0;
+    const a = audio(); if (!a) return;
+    const o = a.createOscillator(), g = a.createGain(), T = a.currentTime + t0;
     o.type = type; o.frequency.value = f;
     g.gain.setValueAtTime(0.0001, T); g.gain.linearRampToValueAtTime(vol, T + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, T + dur);
     o.connect(g).connect(a.destination); o.start(T); o.stop(T + dur + 0.05);
@@ -91,114 +113,161 @@ export function createBossUI($, scene, log) {
   const SFX = {
     alarm() { for (let i = 0; i < 3; i++) tone(880, i * 0.22, 0.16, 'square', 0.1); },
     chime() { tone(659, 0, 0.25); tone(880, 0.18, 0.4); },
-    bell() { tone(523, 0, 1, 'triangle', 0.2); tone(784, 0.05, 1, 'triangle', 0.15); tone(1047, 0.1, 1.2, 'triangle', 0.12); }
+    bell() { tone(523, 0, 1, 'triangle', 0.2); tone(784, 0.05, 1, 'triangle', 0.15); tone(1047, 0.1, 1.2, 'triangle', 0.12); },
+    blip() { tone(740, 0, 0.12, 'sine', 0.08); }
   };
-  const sound = (n) => { if (soundOn) { try { SFX[n](); } catch { /* sin audio */ } } };
+  const sound = (n) => { if (soundOn) { try { SFX[n]?.(); } catch { /* sin audio */ } } };
+  let voices = [];
+  const loadVoices = () => { try { voices = synth?.getVoices() || []; } catch { voices = []; } };
+  synth?.addEventListener?.('voiceschanged', loadVoices);
+  loadVoices();
   function pickVoice() {
-    const vs = window.speechSynthesis?.getVoices() || [];
-    return vs.find((v) => /^es[-_](CO|MX|US|419)/i.test(v.lang)) || vs.find((v) => /^es/i.test(v.lang));
+    return voices.find((v) => /^es[-_](CO|MX|US|419)/i.test(v.lang)) || voices.find((v) => /^es/i.test(v.lang));
   }
   function speak(text) {
-    if (!voiceOn || !('speechSynthesis' in window)) return;
+    if (!voiceOn || !synth) return;
     try {
       const u = new SpeechSynthesisUtterance(text), v = pickVoice();
       if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'es-ES';
       u.pitch = 0.6; u.rate = 1.05;
-      speechSynthesis.cancel(); speechSynthesis.speak(u);
+      synth.cancel(); synth.speak(u);
     } catch { /* sin voz */ }
   }
+  if (!synth) { $('b-voice').disabled = true; $('b-voice').closest('label').title = 'Este navegador no tiene síntesis de voz'; voiceOn = false; }
   $('b-voice').checked = voiceOn; $('b-sound').checked = soundOn;
-  $('b-voice').onchange = (e) => { voiceOn = e.target.checked; store.set('voice', voiceOn ? '1' : '0'); if (voiceOn) speak('Voz activada. Ahora sí te regaño en voz alta.'); else speechSynthesis?.cancel(); };
-  $('b-sound').onchange = (e) => { soundOn = e.target.checked; store.set('sound', soundOn ? '1' : '0'); if (soundOn) sound('chime'); };
+  $('b-voice').onchange = (e) => {
+    voiceOn = e.target.checked; store.set('voice', voiceOn ? '1' : '0');
+    if (voiceOn) speak('Voz activada. Ahora sí te regaño en voz alta.'); else { try { synth?.cancel(); } catch { /* nada */ } }
+  };
+  $('b-sound').onchange = (e) => { soundOn = e.target.checked; store.set('sound', soundOn ? '1' : '0'); if (soundOn) { audio(); sound('chime'); } };
 
   // ---------- Decir algo: panel + bocadillo 3D + voz ----------
-  const bubble = $('bubble'); let bubbleTimer = 0;
+  const bubble = $('bubble'); let bubbleTimer = 0, bubbleRaf = 0;
+  function placeBubble() {
+    if (!scene?.getBossScreenPos) return;
+    const p = scene.getBossScreenPos();
+    bubble.classList.toggle('off', !p.visible);
+    // mantener el bocadillo dentro de la ventana (en movil o con zoom se salia por los bordes)
+    const bw = bubble.offsetWidth, bh = bubble.offsetHeight, m = 10;
+    const x = Math.min(Math.max(p.x, bw / 2 + m), innerWidth - bw / 2 - m);
+    const y = Math.min(Math.max(p.y, bh + m), innerHeight - m);
+    bubble.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`;
+  }
+  function followBubble() { // el rAF solo corre mientras el bocadillo esta visible
+    placeBubble();
+    bubbleRaf = bubble.classList.contains('show') && !document.hidden ? requestAnimationFrame(followBubble) : 0;
+  }
   function say(text, { voice = true } = {}) {
     if (!text) return;
     $('boss-say').textContent = text;
-    bubble.textContent = text; bubble.hidden = false; bubble.classList.add('show');
-    clearTimeout(bubbleTimer); bubbleTimer = setTimeout(() => bubble.classList.remove('show'), 9000);
+    if (scene) {
+      bubble.textContent = text;
+      placeBubble(); // posicionar antes de mostrar: evita el salto desde la esquina
+      bubble.classList.add('show');
+      if (!bubbleRaf) bubbleRaf = requestAnimationFrame(followBubble);
+      clearTimeout(bubbleTimer); bubbleTimer = setTimeout(() => bubble.classList.remove('show'), 9000);
+    }
     if (voice) speak(text);
   }
-  (function followBubble() {
-    requestAnimationFrame(followBubble);
-    if (!bubble.classList.contains('show') || !scene?.getBossScreenPos) return;
-    const p = scene.getBossScreenPos();
-    bubble.style.opacity = p.visible ? '' : '0';
-    bubble.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px) translate(-50%, -100%)`;
-  })();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && bubble.classList.contains('show') && !bubbleRaf) bubbleRaf = requestAnimationFrame(followBubble); });
 
   // ---------- Estadisticas del dia ----------
   let day = null;
   const emptyDay = () => ({ date: todayKey(), m: new Array(1440).fill(0), h: Array.from({ length: 24 }, () => [0, 0, 0]), best: 0, dists: 0 });
   function loadDay() {
-    try { const j = JSON.parse(localStorage.getItem('jefe.day.' + todayKey())); if (j?.m?.length === 1440) return j; } catch { /* nada */ }
+    try { const j = JSON.parse(localStorage.getItem('jefe.day.' + todayKey())); if (j?.m?.length === 1440 && j?.h?.length === 24) return j; } catch { /* nada */ }
     return emptyDay();
   }
   const saveDay = () => { try { localStorage.setItem('jefe.day.' + day.date, JSON.stringify(day)); } catch { /* lleno */ } };
+  // borrar dias de hace mas de una semana para no llenar el almacenamiento
+  try {
+    const cut = Date.now() - 7 * 864e5;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i), m = /^jefe\.(day|pomo)\.(\d{4}-\d{2}-\d{2})$/.exec(k || '');
+      if (m && new Date(m[2]).getTime() < cut) localStorage.removeItem(k);
+    }
+  } catch { /* sin storage */ }
   day = loadDay();
 
-  const hourly = $('day-hours').getContext('2d'), line = $('day-line').getContext('2d');
+  const TXT_DIM = '#8696bb';
   function renderDay() {
     let f = 0, d = 0, a = 0;
     for (const h of day.h) { f += h[0]; d += h[1]; a += h[2]; }
     const tot = f + d + a || 1;
     $('day-f').textContent = `${Math.round(f / 60)} min`; $('day-d').textContent = `${Math.round(d / 60)} min`; $('day-a').textContent = `${Math.round(a / 60)} min`;
     $('day-pct').textContent = `${Math.round((f / tot) * 100)}%`; $('day-best').textContent = `${Math.round(day.best / 60)} min`; $('day-dists').textContent = day.dists;
+    $('day-hours').setAttribute('aria-label', `Hoy: ${Math.round(f / 60)} min enfocado, ${Math.round(d / 60)} distraído, ${Math.round(a / 60)} ausente`);
     // barras por hora
-    let W = $('day-hours').width, H = $('day-hours').height; hourly.clearRect(0, 0, W, H);
-    const bw = W / 24;
-    day.h.forEach((h, i) => {
-      let y = H - 12; const sc = (H - 16) / 3600;
-      [[0, COLORS[1]], [1, COLORS[2]], [2, COLORS[3]]].forEach(([k, c]) => { const bh = h[k] * sc; hourly.fillStyle = c; hourly.fillRect(i * bw + 1, y - bh, bw - 2, bh); y -= bh; });
-    });
-    hourly.fillStyle = '#7f8fb3'; hourly.font = '9px sans-serif';
-    for (const hh of [0, 6, 12, 18]) hourly.fillText(`${hh}h`, hh * bw + 2, H - 2);
+    const hc = fitCanvas($('day-hours'));
+    if (hc) {
+      const { ctx, w: W, h: H } = hc, bw = W / 24, sc = (H - 16) / 3600, curH = new Date().getHours();
+      ctx.fillStyle = 'rgba(134,150,187,.08)'; ctx.fillRect(curH * bw, 0, bw, H - 12); // hora actual
+      day.h.forEach((h, i) => {
+        let y = H - 12;
+        [[0, COLORS[1]], [1, COLORS[2]], [2, COLORS[3]]].forEach(([k, c]) => { const bh = h[k] * sc; if (bh <= 0) return; ctx.fillStyle = c; ctx.fillRect(i * bw + 1, y - bh, Math.max(1, bw - 2), bh); y -= bh; });
+      });
+      ctx.fillStyle = TXT_DIM; ctx.font = '9px system-ui, sans-serif'; ctx.textBaseline = 'alphabetic';
+      for (const hh of [0, 6, 12, 18]) ctx.fillText(`${hh}h`, hh * bw + 2, H - 2);
+    }
     // linea de tiempo del dia
-    W = $('day-line').width; H = $('day-line').height; line.clearRect(0, 0, W, H);
-    const mw = W / 1440;
-    for (let i = 0; i < 1440; i++) { if (!day.m[i]) continue; line.fillStyle = COLORS[day.m[i]]; line.fillRect(i * mw, 0, Math.ceil(mw), H - 10); }
-    const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-    line.fillStyle = '#fff'; line.fillRect(nowMin * mw, 0, 1.5, H - 10);
-    line.fillStyle = '#7f8fb3'; line.font = '9px sans-serif';
-    for (const hh of [0, 6, 12, 18, 24]) line.fillText(`${hh}h`, Math.min(hh * 60 * mw, W - 14), H - 1);
+    const lc = fitCanvas($('day-line'));
+    if (lc) {
+      const { ctx, w: W, h: H } = lc, mw = W / 1440;
+      for (let i = 0; i < 1440; i++) { if (!day.m[i]) continue; ctx.fillStyle = COLORS[day.m[i]]; ctx.fillRect(i * mw, 0, Math.max(1, Math.ceil(mw)), H - 10); }
+      const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+      ctx.fillStyle = '#fff'; ctx.fillRect(nowMin * mw, 0, 1.5, H - 10);
+      ctx.fillStyle = TXT_DIM; ctx.font = '9px system-ui, sans-serif';
+      for (const hh of [0, 6, 12, 18, 24]) ctx.fillText(`${hh}h`, Math.min(hh * 60 * mw, W - 14), H - 1);
+    }
   }
+  // redibujar al cambiar de tamano (rotar el movil, cambiar de pestana)
+  new ResizeObserver(() => renderDay()).observe($('day-hours'));
 
-  // ---------- Pomodoro ----------
-  const PM = { mode: 'idle', paused: false, left: 0, cfg: [25, 5], focusSec: 0, distSec: 0, absSec: 0, distractions: 0, cycles: +store.get('pomo.' + todayKey(), '0'), lastDistSay: 0 };
+  // ---------- Pomodoro (con reloj de pared: no se atrasa si el navegador frena los timers en segundo plano) ----------
+  const PM = { mode: 'idle', paused: false, endAt: 0, left: 0, total: 0, cfg: [25, 5], focusSec: 0, distSec: 0, absSec: 0, distractions: 0, cycles: +store.get('pomo.' + todayKey(), '0') || 0 };
   const mmss = (s) => `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+  const secsLeft = () => (PM.paused ? PM.left : Math.max(0, Math.ceil((PM.endAt - Date.now()) / 1000)));
+  function startPhase(mode, min) { PM.mode = mode; PM.paused = false; PM.total = min * 60; PM.left = PM.total; PM.endAt = Date.now() + PM.total * 1000; }
   function renderPomo() {
-    $('pomo-time').textContent = PM.mode === 'idle' ? mmss(PM.cfg[0] * 60) : mmss(PM.left);
-    $('pomo-mode').textContent = PM.mode === 'idle' ? 'Pomodoro' : PM.paused ? 'En pausa' : PM.mode === 'focus' ? 'A TRABAJAR' : 'DESCANSO';
-    $('pomo-mode').style.color = PM.mode === 'focus' && !PM.paused ? '#ff3355' : PM.mode === 'break' ? '#19ffa0' : '';
-    $('pomo-go').textContent = PM.mode === 'idle' ? 'Iniciar' : 'Saltar';
+    const left = PM.mode === 'idle' ? PM.cfg[0] * 60 : secsLeft();
+    $('pomo-time').textContent = mmss(left);
+    $('pomo-mode').textContent = PM.mode === 'idle' ? 'Pomodoro' : PM.paused ? 'EN PAUSA' : PM.mode === 'focus' ? 'A TRABAJAR' : 'DESCANSO';
+    const box = $('pomo'); box.dataset.mode = PM.mode; box.dataset.paused = PM.paused;
+    $('pomo-bar').style.width = PM.mode === 'idle' || !PM.total ? '0%' : `${(100 * (PM.total - left)) / PM.total}%`;
+    $('pomo-go').textContent = PM.mode === 'idle' ? 'Iniciar' : PM.mode === 'focus' ? 'Saltar a descanso' : 'Terminar descanso';
     $('pomo-pause').textContent = PM.paused ? 'Seguir' : 'Pausa';
+    $('pomo-pause').disabled = $('pomo-reset').disabled = PM.mode === 'idle';
+    $('pomo-cfg').disabled = PM.mode !== 'idle';
     $('pomo-stats').textContent = `Hoy: ${PM.cycles} pomodoro${PM.cycles === 1 ? '' : 's'}` + (PM.mode === 'focus' ? ` · distracciones: ${PM.distractions}` : '');
   }
   $('pomo-cfg').onchange = (e) => { PM.cfg = e.target.value.split('-').map(Number); renderPomo(); };
   $('pomo-go').onclick = () => {
     audio();
-    if (PM.mode === 'idle') { Object.assign(PM, { mode: 'focus', paused: false, left: PM.cfg[0] * 60, focusSec: 0, distSec: 0, absSec: 0, distractions: 0 }); say(pickFrom('pstart', P.pomo.start)); sound('chime'); }
-    else if (PM.mode === 'focus') { PM.mode = 'break'; PM.left = PM.cfg[1] * 60; say(pickFrom('pbs', P.pomo.breakStart)); }
+    if (PM.mode === 'idle') { startPhase('focus', PM.cfg[0]); Object.assign(PM, { focusSec: 0, distSec: 0, absSec: 0, distractions: 0 }); say(pickFrom('pstart', P.pomo.start)); sound('chime'); }
+    else if (PM.mode === 'focus') { startPhase('break', PM.cfg[1]); say(pickFrom('pbs', P.pomo.breakStart)); }
     else { PM.mode = 'idle'; PM.paused = false; }
     renderPomo();
   };
-  $('pomo-pause').onclick = () => { if (PM.mode === 'idle') return; PM.paused = !PM.paused; if (PM.paused) say(pickFrom('pp', P.pomo.paused), { voice: false }); renderPomo(); };
+  $('pomo-pause').onclick = () => {
+    if (PM.mode === 'idle') return;
+    if (!PM.paused) { PM.left = secsLeft(); PM.paused = true; say(pickFrom('pp', P.pomo.paused), { voice: false }); }
+    else { PM.paused = false; PM.endAt = Date.now() + PM.left * 1000; }
+    renderPomo();
+  };
   $('pomo-reset').onclick = () => { PM.mode = 'idle'; PM.paused = false; renderPomo(); };
-  function pomoTick(st) {
+  function pomoTick(st, dt) {
     if (PM.mode === 'idle' || PM.paused) return;
-    PM.left--;
     if (PM.mode === 'focus') {
-      if (st === 'focused') PM.focusSec++; else if (st === 'distracted') PM.distSec++; else if (st === 'absent') PM.absSec++;
+      if (st === 'focused') PM.focusSec += dt; else if (st === 'distracted') PM.distSec += dt; else if (st === 'absent') PM.absSec += dt;
     }
-    if (PM.left <= 0) {
+    if (secsLeft() <= 0) {
       if (PM.mode === 'focus') {
-        const tot = PM.cfg[0] * 60, pct = Math.round((PM.focusSec / tot) * 100);
+        const pct = Math.min(100, Math.round((PM.focusSec / (PM.total || 1)) * 100));
         PM.cycles++; store.set('pomo.' + todayKey(), String(PM.cycles));
         sound('bell');
         if (pct >= 70) scene?.burst?.();
         say(`${pickFrom('pdone', P.pomo.done)} Enfocado ${pct}% del tiempo, ${PM.distractions} distracciones.`);
-        PM.mode = 'break'; PM.left = PM.cfg[1] * 60;
+        startPhase('break', PM.cfg[1]);
       } else {
         sound('bell'); say(pickFrom('pbe', P.pomo.breakEnd)); PM.mode = 'idle';
       }
@@ -223,19 +292,22 @@ export function createBossUI($, scene, log) {
   };
 
   // ---------- Estado, rachas, alarmas y efectos (1 Hz) ----------
-  let prev = 'unknown', stateSec = 0, streak = 0, lastAlarm = 0, lastSayAt = 0, lastChangeSay = 0, renderN = 0;
+  let prev = 'unknown', stateSec = 0, streak = 0, lastAlarm = 0, lastSayAt = 0, lastChangeSay = 0, renderN = 0, lastTick = 0;
   const STREAKS = [300, 900, 1800, 3600];
   function phraseFor(st) {
     const h = hourNow(), s = P[st] || P.unknown;
     if (st === 'unknown') return pickFrom('unk', P.unknown);
-    let pool = [...s.any];
+    const pool = [...s.any];
     if (st === 'focused') pool.push(...(h < 12 ? s.morning : h < 19 ? s.afternoon : s.night));
     if (st === 'distracted') { if (stateSec >= 120) pool.push(...s.long); if (day.dists >= 3) pool.push(...s.repeat); }
     if (st === 'absent') { if (stateSec > 600) pool.push(...s.long); if (h >= 12 && h < 14) pool.push(...s.lunch); if (h >= 22 || h < 6) pool.push(...s.night); }
     return pickFrom('ph' + st, pool);
   }
   function tick(st) {
-    const now = Date.now(); curState = st;
+    const now = Date.now();
+    // segundos reales desde el ultimo tick (los timers se frenan en segundo plano); tope para no inventar datos
+    const dt = lastTick ? Math.max(1, Math.min(5, Math.round((now - lastTick) / 1000))) : 1;
+    lastTick = now; curState = st;
     if (todayKey() !== day.date) { saveDay(); day = emptyDay(); }
     // cambio de estado
     if (st !== prev) {
@@ -249,16 +321,17 @@ export function createBossUI($, scene, log) {
         const pomoScold = st === 'distracted' && PM.mode === 'focus' && !PM.paused;
         say(was === 'absent' && wasSec >= 60 && st !== 'absent' ? pickFrom('back', P.back) : pomoScold ? pickFrom('pd', P.pomo.distracted) : phraseFor(st));
       }
-    } else stateSec++;
+    } else stateSec += dt;
     // minuto, hora y rachas
     if (st !== 'unknown') {
       const d = new Date(), idx = d.getHours() * 60 + d.getMinutes();
       day.m[idx] = day.m[idx] === 2 ? 2 : CODE[st]; // si hubo distraccion en ese minuto, se conserva
-      day.h[d.getHours()][CODE[st] - 1]++;
+      day.h[d.getHours()][CODE[st] - 1] += dt;
     }
     if (st === 'focused') {
-      streak++;
-      if (STREAKS.includes(streak)) { say(pickFrom('st' + streak, P.streak[streak]), {}); sound('chime'); scene?.burst?.(); }
+      const before = streak; streak += dt;
+      const hit = STREAKS.find((s) => before < s && streak >= s);
+      if (hit) { say(pickFrom('st' + hit, P.streak[hit])); sound('chime'); scene?.burst?.(); }
       day.best = Math.max(day.best, streak);
     }
     // alarma por distraccion sostenida (mas estricta en pomodoro)
@@ -267,12 +340,20 @@ export function createBossUI($, scene, log) {
     // frase periodica sin voz para que el panel no sea estatico
     if (now - lastSayAt > 30000 && st !== 'unknown') { lastSayAt = now; say(phraseFor(st), { voice: false }); }
     scene?.update?.({ fx: st === 'distracted' ? 'rage' : st === 'absent' ? 'sleep' : null });
-    pomoTick(st);
+    pomoTick(st, dt);
     if (++renderN % 5 === 0) { renderDay(); saveDay(); }
+  }
+  // guardar al cerrar u ocultar la pestana (antes se perdian hasta 5 s)
+  const flush = () => saveDay();
+  window.addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); else renderPomo(); });
+
+  // Alerta del servidor (jefe/<id>/event): sonido segun severidad
+  function notify(sev) {
+    if (sev === 'critical') sound('alarm'); else if (sev === 'warning') sound('chime'); else sound('blip');
   }
 
   renderPomo(); renderDay();
-  if ('speechSynthesis' in window) speechSynthesis.getVoices();
   say(pickFrom('unk', P.unknown), { voice: false });
-  return { tick, say };
+  return { tick, say, notify };
 }
