@@ -4,6 +4,7 @@ const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const rnd = (a, b) => a + Math.random() * (b - a);
 const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 const r = (x, d = 1) => Math.round(x * 10 ** d) / 10 ** d;
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
 // Hora local de Bogota (UTC-5, sin horario de verano)
 function hourBogota(ms = Date.now()) { const d = new Date(ms - 5 * 3600e3); return d.getUTCHours() + d.getUTCMinutes() / 60; }
@@ -56,7 +57,7 @@ function createCamSala() {
   const pres = createPresence(salaProfile); const t0 = Date.now(); let motion = 0, gain = 4;
   return {
     params: () => ({ gain }),
-    cmd(o) { if (typeof o.gain === 'number') gain = clamp(o.gain, 0.5, 12); },
+    cmd(o) { if (isNum(o.gain)) gain = clamp(o.gain, 0.5, 12); },
     tick(now) {
       const s = pres.step(now); const h = hourBogota(now);
       const tgt = s === 'focused' ? rnd(1.5, 5) : s === 'distracted' ? rnd(10, 26) : rnd(0.05, 0.4);
@@ -72,15 +73,17 @@ function createCamSala() {
 
 // ---------- Termostato de 3 habitaciones ----------
 function createTermostato(world) {
-  const rooms = { sala: world.tempOut + 5, cuarto: world.tempOut + 4, cocina: world.tempOut + 6 };
+  // Si la API del clima aun no responde (o mando basura) se usa 14 C como exterior
+  const outT = () => (isNum(world.tempOut) ? world.tempOut : 14);
+  const rooms = { sala: outT() + 5, cuarto: outT() + 4, cocina: outT() + 6 };
   let setpoint = 20, heating = 0, last = Date.now();
   return {
     params: () => ({ setpoint }),
-    cmd(o) { if (typeof o.setpoint === 'number') setpoint = clamp(o.setpoint, 10, 30); },
+    cmd(o) { if (isNum(o.setpoint)) setpoint = clamp(o.setpoint, 10, 30); },
     tick(now) {
       const dt = clamp((now - last) / 60000, 0, 5); last = now;
       for (const k of Object.keys(rooms)) {
-        rooms[k] += (world.tempOut + 4 - rooms[k]) * (dt / 360) * 1.5; // perdida hacia el exterior (tau ~ 4 h)
+        rooms[k] += (outT() + 4 - rooms[k]) * (dt / 360) * 1.5; // perdida hacia el exterior (tau ~ 4 h)
         if (world.present) rooms[k] += 0.004 * dt;
         if (k === 'sala' && heating) rooms[k] += 0.05 * dt;
       }
@@ -134,7 +137,7 @@ function createLuz(world) {
     cmd(o) {
       if (o.mode === 'auto' || o.mode === 'manual') mode = o.mode;
       if ('on' in o) { manualOn = o.on ? 1 : 0; mode = 'manual'; }
-      if (typeof o.brightness === 'number') bright = clamp(o.brightness, 5, 100);
+      if (isNum(o.brightness)) bright = clamp(o.brightness, 5, 100);
     },
     tick(now) {
       const h = hourBogota(now); const ambient = daylight(h) * 650 + 20;
@@ -149,18 +152,24 @@ function createReplay(rows, header, mapFn) {
   let i = 0;
   return {
     params: () => ({ row: i, total: rows.length }),
-    cmd(o) { if (o.rewind) i = 0; if (typeof o.row === 'number') i = clamp(Math.floor(o.row), 0, rows.length - 1); },
+    cmd(o) { if (o.rewind) i = 0; if (isNum(o.row) && rows.length) i = clamp(Math.floor(o.row), 0, rows.length - 1); },
     tick() {
+      if (!rows.length) return null;
       const raw = rows[i]; i = (i + 1) % rows.length;
-      const obj = {}; header.forEach((h, k) => { obj[h] = Number(raw[k]); });
+      // Celdas vacias o no numericas => campo omitido (nunca 0 inventado ni NaN)
+      const obj = {};
+      header.forEach((h, k) => { const c = raw[k]; const v = c === undefined || String(c).trim() === '' ? NaN : Number(c); if (Number.isFinite(v)) obj[h] = v; });
       return { ...mapFn(obj), replay: 1, row: i };
     }
   };
 }
 
+// CSV simple (sin comillas). Ignora BOM, lineas vacias y espacios alrededor de cada celda.
 function parseCsv(text) {
-  const lines = text.trim().split(/\r?\n/);
-  return { header: lines[0].split(','), rows: lines.slice(1).map((l) => l.split(',')) };
+  const lines = String(text).replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim() !== '');
+  if (!lines.length) return { header: [], rows: [] };
+  const split = (l) => l.split(',').map((c) => c.trim());
+  return { header: split(lines[0]), rows: lines.slice(1).map(split) };
 }
 
-module.exports = { clamp, rnd, gauss, r, hourBogota, daylight, createPresence, createEsp32Sim, createCamSala, createTermostato, createEnchufe, createPuerta, createLuz, createReplay, parseCsv };
+module.exports = { isNum, clamp, rnd, gauss, r, hourBogota, daylight, createPresence, createEsp32Sim, createCamSala, createTermostato, createEnchufe, createPuerta, createLuz, createReplay, parseCsv };
