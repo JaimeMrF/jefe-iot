@@ -156,8 +156,10 @@ void buildStatus(JsonDocument &d) {
 }
 
 // ---------- Camara ----------
+static bool camRaw = false;  // true: el sensor no hace JPEG, se captura RGB565 y se comprime por software
+
 bool initCamera() {
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 4; i++) {
     camera_config_t c = {};
     c.ledc_channel = LEDC_CHANNEL_0;
     c.ledc_timer = LEDC_TIMER_0;
@@ -169,16 +171,21 @@ bool initCamera() {
     c.pin_sccb_sda = SIOD_GPIO_NUM; c.pin_sccb_scl = SIOC_GPIO_NUM;
     c.pin_pwdn = PWDN_GPIO_NUM; c.pin_reset = RESET_GPIO_NUM;
     c.xclk_freq_hz = 20000000;
-    c.pixel_format = PIXFORMAT_JPEG;
+    camRaw = (i >= 1);  // intento 0: JPEG nativo; despues RGB565
+    c.pixel_format = camRaw ? PIXFORMAT_RGB565 : PIXFORMAT_JPEG;
     c.frame_size = FRAMESIZE_QVGA;  // 320x240: liviano para WiFi + textura 3D
     c.jpeg_quality = jpegQuality;
-    c.fb_count = psramFound() ? 2 : 1;
+    c.fb_count = (psramFound() && !camRaw) ? 2 : 1;
     c.fb_location = psramFound() ? CAMERA_FB_IN_PSRAM : CAMERA_FB_IN_DRAM;
     c.grab_mode = CAMERA_GRAB_LATEST;
-    if (esp_camera_init(&c) == ESP_OK) {
+    esp_err_t er = esp_camera_init(&c);
+    if (er == ESP_OK) {
+      sensor_t *sn = esp_camera_sensor_get();
+      Serial.printf("[cam] OK modo=%s sensor PID=0x%04x\n", camRaw ? "RGB565->JPEG sw" : "JPEG", sn ? sn->id.PID : 0);
       camErr = "";
       return true;
     }
+    Serial.printf("[cam] init intento %d fallo: 0x%x\n", i, er);
     esp_camera_deinit();
     delay(300);
   }
@@ -211,7 +218,17 @@ void sampleFrame() {
   static uint8_t small[40 * 30 * 2];  // QVGA reducido 8x en RGB565
   static uint8_t prev[40 * 30];
   static bool havePrev = false;
-  bool ok = jpg2rgb565(fb->buf, fb->len, small, JPG_SCALE_8X);
+  bool ok = true;
+  if (camRaw) {  // RGB565 320x240: submuestreo 8x directo
+    for (int y = 0; y < 30; y++)
+      for (int x = 0; x < 40; x++) {
+        const uint8_t *px = fb->buf + ((y * 8) * 320 + (x * 8)) * 2;
+        small[2 * (y * 40 + x)] = px[0];
+        small[2 * (y * 40 + x) + 1] = px[1];
+      }
+  } else {
+    ok = jpg2rgb565(fb->buf, fb->len, small, JPG_SCALE_8X);
+  }
   esp_camera_fb_return(fb);
   xSemaphoreGive(camMutex);
   if (!ok) return;
@@ -244,7 +261,14 @@ static esp_err_t snapshotHandler(httpd_req_t *req) {
     return ESP_FAIL;
   }
   httpd_resp_set_type(req, "image/jpeg");
-  esp_err_t r = httpd_resp_send(req, (const char *)fb->buf, fb->len);
+  esp_err_t r;
+  if (camRaw) {
+    uint8_t *jb = nullptr; size_t jl = 0;
+    if (frame2jpg(fb, 20, &jb, &jl)) { r = httpd_resp_send(req, (const char *)jb, jl); free(jb); }
+    else r = httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "jpeg encode");
+  } else {
+    r = httpd_resp_send(req, (const char *)fb->buf, fb->len);
+  }
   esp_camera_fb_return(fb);
   xSemaphoreGive(camMutex);
   return r;
@@ -440,10 +464,14 @@ void publishSnapshot() {
   if (!camOk || xSemaphoreTake(camMutex, pdMS_TO_TICKS(300)) != pdTRUE) return;
   camera_fb_t *fb = esp_camera_fb_get();
   if (fb) {
-    if (mqtt.beginPublish(T_SNAP, fb->len, false)) {
-      mqtt.write(fb->buf, fb->len);
+    uint8_t *jb = nullptr; size_t jl = 0;
+    const uint8_t *pb = fb->buf; size_t pl = fb->len;
+    if (camRaw) { if (frame2jpg(fb, 20, &jb, &jl)) { pb = jb; pl = jl; } else pl = 0; }
+    if (pl && mqtt.beginPublish(T_SNAP, pl, false)) {
+      mqtt.write(pb, pl);
       mqtt.endPublish();
     }
+    if (jb) free(jb);
     esp_camera_fb_return(fb);
     char live[80];
     int n = snprintf(live, sizeof(live), "{\"motion\":%.1f,\"brightness\":%.0f}", motionEma, brightness);
