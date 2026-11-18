@@ -126,7 +126,7 @@ function createRules(emit, hourFn, opts = {}) {
       if (!b) return;
       const dist = track('dist', b.name === 'distracted', now);
       if (dist >= T.distractedMs && cool('distraido', C.distraido, now, 'warning'))
-        fire('distraido_prolongado', 'warning', 'boss', Math.round(dist / 1000), 'El jefe te ve distraido hace mas de 1 minuto');
+        fire('distraido_prolongado', 'warning', 'boss', Math.round(dist / 1000), T.distractedMs === 60000 ? 'El jefe te ve distraido hace mas de 1 minuto' : `El jefe te ve distraido hace mas de ${Math.round(T.distractedMs / 1000)} s`);
       const abs = track('abs', b.name === 'absent', now);
       if (abs > T.absentMs) {
         const h = hourFn(now);
@@ -149,7 +149,13 @@ function createRules(emit, hourFn, opts = {}) {
       const real = mode === 'real';
       fire('fuente_datos', 'info', 'esp32cam-01', real ? 1 : 0, real ? 'ESP32-CAM real conectada: se detiene la simulacion' : 'ESP32-CAM real sin datos: simulacion activada');
       return true;
-    }
+    },
+    // Cambia umbrales en caliente (p. ej. distractedMs segun la personalidad del jefe). Ignora valores no numericos.
+    setThresholds(partial = {}) {
+      for (const [k, v] of Object.entries(partial || {})) if (k in T && num(v) !== undefined) T[k] = v;
+      return { ...T };
+    },
+    get thresholds() { return { ...T }; }
   };
 }
 

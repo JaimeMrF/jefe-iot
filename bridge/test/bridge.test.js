@@ -205,7 +205,8 @@ test('reglas sobre telemetria entrante publican en jefe/<id>/event', () => {
   const { client, send } = setup();
   send('jefe/ds-co2/telemetry', { co2: 1700 });
   const ev = client.json('jefe/ds-co2/event')[0];
-  assert.deepEqual(Object.keys(ev).sort(), ['device', 'msg', 'rule', 'severity', 'value']);
+  assert.deepEqual(Object.keys(ev).sort(), ['device', 'id', 'msg', 'rule', 'severity', 'ts', 'value']); // v2 agrega ts e id
+  assert.equal(ev.ts, 1.7e12); assert.equal(ev.id, `${1.7e12}-co2_alto-ds-co2`);
   assert.equal(ev.rule, 'co2_alto'); assert.equal(ev.severity, 'critical');
 });
 test('limite global de eventos por minuto', () => {

@@ -6,6 +6,7 @@
 const mqtt = require('mqtt');
 const { createBridge, createHealthServer, loadConfig } = require('./bridge');
 const { createLogger } = require('./log');
+const { createStore } = require('./store');
 
 const cfg = loadConfig(process.env);
 const log = createLogger({ level: cfg.logLevel, format: cfg.logFormat });
@@ -18,7 +19,10 @@ const client = mqtt.connect(cfg.mqttUrl, {
   will: { topic: 'jefe/bridge/status', payload: 'offline', retain: true, qos: 1 }
 });
 
-const bridge = createBridge({ client, config: cfg, log });
+// Estado persistido (personalidad, xp, logros, historial por dia) en DATA_DIR/jefe-state.json
+const store = createStore({ dir: cfg.dataDir, log });
+log.info('estado persistido en', { file: store.file, tz: cfg.tz || 'proceso' });
+const bridge = createBridge({ client, config: cfg, log, store });
 
 // Reconexion con backoff exponencial (2 s -> 30 s), se reinicia al conectar
 let shuttingDown = false, wasConnected = false;
@@ -42,7 +46,7 @@ bridge.start();
 let server = null;
 if (cfg.healthPort > 0) {
   server = createHealthServer(bridge, log);
-  server.listen(cfg.healthPort, cfg.healthHost, () => log.info('health en /health', { port: cfg.healthPort }));
+  server.listen(cfg.healthPort, cfg.healthHost, () => log.info('health en /health y reporte en /report', { port: cfg.healthPort }));
 }
 
 // Apagado limpio: detener bucles, marcar offline (retenido, QoS 1) y cerrar el cliente esperando la entrega
@@ -51,6 +55,7 @@ function shutdown(reason, code = 0) {
   shuttingDown = true;
   log.info('apagando', { reason });
   bridge.stop();
+  bridge.persist();
   if (server) server.close();
   const force = setTimeout(() => process.exit(code), 4000);
   force.unref();
