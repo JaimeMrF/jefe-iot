@@ -3,7 +3,7 @@
 
 export const AUTHORS = ['Jaime Alejandro Vega Barbosa', 'Juan Sebastian Jimenez Daza', 'David Santiago Gonzalez Nigrinis'];
 export const LEMA = 'Un jefe virtual que vigila tu escritorio con una ESP32-CAM, piensa en la nube y te habla en 3D.';
-export const SITE = '187.33.158.65.sslip.io';
+export const SITE = 'jefeiot.duckdns.org';
 
 export const SPEAKERS = {
   Santiago: { cls: 'sp-santiago' },
@@ -445,6 +445,6 @@ export const STEPS = [
       ${authorsHtml()}
       <div class="t-actions center tz" style="--i:7"><button type="button" class="t-btn primary xl" data-act="finish">Probar el panel</button></div>
     </div>`,
-    notes: 'Y bueno, así es nuestro jefe: hardware real, una nube propia y un jefe con personalidad. Lo pueden probar en 187.33.158.65.sslip.io. El jefe nunca duerme… pero nosotros sí, entonces muchas gracias. ¿Preguntas?'
+    notes: 'Y bueno, así es nuestro jefe: hardware real, una nube propia y un jefe con personalidad. Lo pueden probar en jefeiot.duckdns.org. El jefe nunca duerme… pero nosotros sí, entonces muchas gracias. ¿Preguntas?'
   }
 ];
