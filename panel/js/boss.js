@@ -332,6 +332,7 @@ export function createBossUI($, scene, log) {
   // ---------- Estado, rachas, alarmas y efectos (1 Hz) ----------
   let prev = 'unknown', stateSec = 0, streak = 0, lastAlarm = 0, lastSayAt = 0, lastChangeSay = 0, renderN = 0, lastTick = 0;
   const STREAKS = [300, 900, 1800, 3600];
+  let liveState = null;
   function phraseFor(st) {
     const h = hourNow(), s = P[st] || P.unknown, b = PB[pers];
     if (st === 'unknown') return pickFrom('unk', P.unknown);
@@ -342,18 +343,26 @@ export function createBossUI($, scene, log) {
     if (st === 'absent') { if (sarc && stateSec > 600) pool.push(...s.long); if (h >= 12 && h < 14) pool.push(...s.lunch); if (h >= 22 || h < 6) pool.push(...s.night); }
     return pickFrom(pers + st, pool);
   }
-  function tick(st) {
+  // record=false (simulacion de la demostracion): reacciona igual, pero no toca las estadisticas guardadas del dia
+  function tick(st, { record = true } = {}) {
     const now = Date.now();
     // segundos reales desde el ultimo tick (los timers se frenan en segundo plano); tope para no inventar datos
     const dt = lastTick ? Math.max(1, Math.min(5, Math.round((now - lastTick) / 1000))) : 1;
     lastTick = now; curState = st;
+    if (!record && !liveState) {
+      liveState = { prev, stateSec, streak, lastAlarm, lastSayAt, lastChangeSay };
+      prev = 'unknown'; stateSec = 0; streak = 0;
+    } else if (record && liveState) {
+      ({ prev, stateSec, streak, lastAlarm, lastSayAt, lastChangeSay } = liveState);
+      liveState = null;
+    }
     if (todayKey() !== day.date) { saveDay(); day = emptyDay(); }
     // cambio de estado
     if (st !== prev) {
       const was = prev, wasSec = stateSec;
       prev = st; stateSec = 0;
-      if (st === 'distracted') { day.dists++; if (PM.mode === 'focus' && !PM.paused) PM.distractions++; }
-      if (was === 'focused' && streak >= 60) day.best = Math.max(day.best, streak);
+      if (st === 'distracted' && record) { day.dists++; if (PM.mode === 'focus' && !PM.paused) PM.distractions++; }
+      if (was === 'focused' && streak >= 60 && record) day.best = Math.max(day.best, streak);
       if (st !== 'focused') streak = 0;
       if (now - lastChangeSay > 8000 && st !== 'unknown') {
         lastChangeSay = now; lastSayAt = now;
@@ -362,7 +371,7 @@ export function createBossUI($, scene, log) {
       }
     } else stateSec += dt;
     // minuto, hora y rachas
-    if (st !== 'unknown') {
+    if (st !== 'unknown' && record) {
       const d = new Date(), idx = d.getHours() * 60 + d.getMinutes();
       day.m[idx] = day.m[idx] === 2 ? 2 : CODE[st]; // si hubo distraccion en ese minuto, se conserva
       day.h[d.getHours()][CODE[st] - 1] += dt;
@@ -371,7 +380,7 @@ export function createBossUI($, scene, log) {
       const before = streak; streak += dt;
       const hit = STREAKS.find((s) => before < s && streak >= s);
       if (hit) { say(pickFrom(pers + 'st' + hit, PB[pers].streak?.[hit] || P.streak[hit])); sound('chime'); scene?.burst?.(); }
-      day.best = Math.max(day.best, streak);
+      if (record) day.best = Math.max(day.best, streak);
     }
     // alarma por distraccion sostenida: el limite depende de la personalidad (como en el servidor) y es mas corto en pomodoro
     const plim = PERS_INFO[pers].limit, limit = PM.mode === 'focus' && !PM.paused ? Math.min(20, plim) : plim;
@@ -383,8 +392,14 @@ export function createBossUI($, scene, log) {
     // frase periodica sin voz para que el panel no sea estatico
     if (now - lastSayAt > 30000 && st !== 'unknown') { lastSayAt = now; say(phraseFor(st), { voice: false }); }
     scene?.update?.({ fx: st === 'distracted' ? 'rage' : st === 'absent' ? 'sleep' : null });
-    pomoTick(st, dt);
-    if (++renderN % 5 === 0) { renderDay(); saveDay(); }
+    pomoTick(record ? st : 'unknown', dt);
+    if (++renderN % 5 === 0 && record) { renderDay(); saveDay(); }
+  }
+  // Reclamo inmediato por distraccion sostenida (lo usa la demostracion; mismo efecto que la alarma del tick)
+  function alarm() {
+    lastAlarm = Date.now(); lastSayAt = lastAlarm; sound('alarm');
+    const b = PB[pers];
+    say(pickFrom(pers + 'long', b.long || P.distracted.long));
   }
   // guardar al cerrar u ocultar la pestana (antes se perdian hasta 5 s)
   const flush = () => saveDay();
@@ -438,5 +453,5 @@ export function createBossUI($, scene, log) {
 
   renderPomo(); renderDay();
   say(pickFrom('unk', P.unknown), { voice: false });
-  return { tick, say, notify, setPersonality, celebrate, localReport };
+  return { tick, say, notify, setPersonality, celebrate, localReport, alarm };
 }

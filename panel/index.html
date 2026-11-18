@@ -34,6 +34,7 @@
         <button type="button" data-view="monitor" aria-pressed="false">Monitor</button>
         <button type="button" data-view="boss" aria-pressed="false">Jefe</button>
       </div>
+      <button type="button" id="btn-tour" class="small" aria-label="Abrir demostración guiada">Demo</button>
       <a id="lnk-graf" class="btn primary small" href="#" target="_blank" rel="noopener">Gráficas<span class="hide-sm">(Grafana)</span></a>
       <label class="sel">Calidad
         <select id="quality">
@@ -240,6 +241,34 @@
 </div>
 
 <div id="toasts" class="toasts" aria-live="polite" aria-relevant="additions"></div>
+
+<!-- Pantalla de entrada: Probar (panel normal) o Demostración (recorrido guiado). ?modo=probar la salta; ?modo=demo arranca la demo. -->
+<div id="landing" class="landing" hidden role="dialog" aria-modal="true" aria-labelledby="landing-title" aria-describedby="landing-lema">
+  <div class="landing-glow" aria-hidden="true"></div>
+  <div class="landing-card">
+    <svg class="landing-eye" viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+      <defs><radialGradient id="landing-eye-g" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="#19ffa0" stop-opacity=".35"/><stop offset="1" stop-color="#19ffa0" stop-opacity="0"/></radialGradient></defs>
+      <circle cx="100" cy="100" r="96" fill="url(#landing-eye-g)"/>
+      <polygon class="t-eye-ico" points="100,22 168,61 168,139 100,178 32,139 32,61"/>
+      <polygon class="t-eye-ico t-eye-ico2" points="100,36 156,68 156,132 100,164 44,132 44,68"/>
+      <g class="t-eye-face"><rect x="62" y="70" width="30" height="7" rx="3"/><rect x="108" y="70" width="30" height="7" rx="3"/>
+      <circle class="t-eye-pupil" cx="77" cy="96" r="10"/><circle class="t-eye-pupil" cx="123" cy="96" r="10"/>
+      <path d="M76 132 Q100 148 124 132" fill="none" stroke-width="7" stroke-linecap="round"/></g>
+    </svg>
+    <h1 id="landing-title" class="landing-brand">JEFE<b>·</b>IOT</h1>
+    <p id="landing-lema" class="landing-lema">Un jefe virtual que vigila tu escritorio con una ESP32-CAM, piensa en la nube y te habla en 3D.</p>
+    <div class="landing-actions">
+      <button type="button" class="landing-btn" data-land="try"><span>Probar</span><small>Usar el panel</small></button>
+      <button type="button" class="landing-btn primary" data-land="demo"><span>Demostración</span><small>Recorrido guiado</small></button>
+    </div>
+    <ul class="landing-authors" aria-label="Autores">
+      <li>Jaime Alejandro Vega Barbosa</li>
+      <li>Juan Sebastian Jimenez Daza</li>
+      <li>David Santiago Gonzalez Nigrinis</li>
+    </ul>
+    <p class="landing-foot">Proyecto final · Internet de las Cosas · <kbd>Enter</kbd> demostración · <kbd>Esc</kbd> probar</p>
+  </div>
+</div>
 
 <dialog id="report" class="dlg" aria-labelledby="h-report">
   <div class="dlg-body">

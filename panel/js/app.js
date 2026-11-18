@@ -2,6 +2,7 @@ import { createScene } from './scene.js';
 import { BleLink, errText, RESET_ES } from './ble.js';
 import { createBossUI, fitCanvas, PERSONALITIES, PERS_INFO } from './boss.js';
 import { createProgress, toDate } from './progress.js';
+import { initTour } from './tour.js';
 
 const $ = (id) => document.getElementById(id);
 const DEVICE = 'esp32cam-01';
@@ -83,13 +84,14 @@ function fmtWhen(d) {
   const t = d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   return d.toDateString() === new Date().toDateString() ? t : `${d.toLocaleDateString('es', { day: 'numeric', month: 'short' })} ${t}`;
 }
-function onEvent(j) {
+function onEvent(j, { simulated = false } = {}) {
   if (!j || typeof j !== 'object') return;
   const now = Date.now();
   if (!isNewEvent(j, now)) return;
   const at = toDate(j.ts) || new Date(now);
   const sev = ['critical', 'warning', 'info'].includes(j.severity) ? j.severity : 'info';
-  const title = RULE_ES[j.rule] || j.rule || 'Alerta';
+  const ruleTitle = RULE_ES[j.rule] || j.rule || 'Alerta';
+  const title = simulated ? `Simulación · ${ruleTitle}` : ruleTitle;
   const dev = DEV_NAMES[j.device]?.[0] || (j.device === DEVICE ? 'ESP32-CAM' : j.device === 'boss' ? 'El jefe' : j.device || '');
   const meta = [dev, fmtWhen(at)].filter(Boolean).join(' · ');
   if (j.rule === 'logro') {
@@ -97,7 +99,7 @@ function onEvent(j) {
     const recent = Math.abs(now - at.getTime()) < 120000; // no festejar eventos viejos (reconexion)
     toast(`🏆 ${title}`, name || j.msg || '', { sev: 'ok', kind: 'achv', meta: [j.value != null ? `Nivel ${j.value}` : '', fmtWhen(at)].filter(Boolean).join(' · '), ttl: 10000 });
     log(`Logro desbloqueado: ${name || j.msg || '?'}`);
-    progress?.onAchievementEvent(name, at);
+    progress?.onAchievementEvent(name, at, { simulated });
     if (recent) bossUI?.celebrate(name);
     return;
   }
@@ -721,8 +723,14 @@ function renderPersHint() {
       : `${lim}. Enviando al servidor...`)
     : `${lim}${P8.confirmed ? '. Sincronizada con el servidor.' : '.'}`;
 }
+let demoPersonality = null;
 function applyPersonality(p, announce = false) {
-  P8.cur = p; store.set('pers', p);
+  store.set('pers', p);
+  if (demoPersonality !== null) { demoPersonality = p; return; }
+  renderPersonality(p, announce);
+}
+function renderPersonality(p, announce = false) {
+  P8.cur = p;
   PERS_BTNS.forEach((b) => { const on = b.dataset.p === p; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
   document.body.dataset.pers = p;
   bossUI.setPersonality(p, { announce });
@@ -739,7 +747,7 @@ function sendPersonality() {
 }
 const sendPersonalitySoon = debounce(() => { bossUI.setPersonality(P8.cur, { announce: true }); sendPersonality(); }, 450);
 function choosePersonality(p) {
-  if (!PERSONALITIES.includes(p) || (p === P8.cur && !P8.pending)) return;
+  if (!PERSONALITIES.includes(p) || (p === (demoPersonality ?? P8.cur) && !P8.pending)) return;
   applyPersonality(p); // el anuncio con voz espera a que el usuario deje de cambiar (flechas)
   P8.pending = p; P8.sentAt = 0;
   sendPersonalitySoon();
@@ -749,7 +757,7 @@ function onBossState(j) {
   // el retenido viejo puede llegar justo despues de mandar el cambio: ignorarlo unos segundos
   if (P8.pending && j.personality !== P8.pending && (!P8.sentAt || Date.now() - P8.sentAt < 8000)) return;
   P8.pending = null; P8.confirmed = true;
-  if (j.personality !== P8.cur) applyPersonality(j.personality); else renderPersHint();
+  if (j.personality !== (demoPersonality ?? P8.cur)) applyPersonality(j.personality); else renderPersHint();
 }
 PERS_BTNS.forEach((b, i) => {
   b.onclick = () => choosePersonality(b.dataset.p);
@@ -762,14 +770,18 @@ PERS_BTNS.forEach((b, i) => {
 });
 applyPersonality(P8.cur);
 const ago = (ms) => { const s = Math.round(ms / 1000); return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min` : `${Math.floor(s / 3600)} h`; };
+// Simulacion local del modo demostracion: solo sustituye el movimiento que entra a este bucle.
+// No publica nada ni escribe en el servidor; los datos reales siguen llegando a S y vuelven al apagarla.
+const SIM = { on: false, motion: 0, brightness: 0, absentMs: 20000, saved: null };
 setInterval(() => {
   const now = Date.now();
   if (now - S.lastLive > 10000) S.httpOk = false; // sin 'live' ni /info, el movimiento viene de la telemetria
+  const sim = SIM.on, motion = sim ? SIM.motion : S.motion, bright = sim ? SIM.brightness : S.brightness, have = sim || S.haveMotion;
   let st = S.boss;
-  if (!S.haveMotion || (!S.httpOk && now - S.lastTele > 40000)) st = 'unknown';
+  if (!have || (!sim && !S.httpOk && now - S.lastTele > 40000)) st = 'unknown';
   else {
-    mAvg = mAvg * 0.7 + S.motion * 0.3;
-    if (mAvg < 1.2) { S.lowSince ||= now; if (now - S.lowSince > 20000) st = 'absent'; else if (st === 'unknown') st = 'focused'; }
+    mAvg = mAvg * 0.7 + motion * 0.3;
+    if (mAvg < 1.2) { S.lowSince ||= now; if (now - S.lowSince > (sim ? SIM.absentMs : 20000)) st = 'absent'; else if (st === 'unknown') st = 'focused'; }
     else { S.lowSince = 0; st = mAvg > 12 ? 'distracted' : 'focused'; }
   }
   if (st !== S.boss) { S.boss = st; log(`El jefe: ${LABEL[st]}`); }
@@ -779,13 +791,14 @@ setInterval(() => {
   const bs = $('boss-state'); bs.textContent = LABEL[st]; bs.dataset.st = st;
   $('score-num').textContent = score; $('score-bar').style.width = `${S.score}%`; $('score-bar').style.background = COLOR[st];
   $('score-pb').setAttribute('aria-valuenow', score);
-  $('m-motion').textContent = S.haveMotion ? S.motion.toFixed(1) : '--';
-  $('m-bright').textContent = S.haveMotion ? S.brightness.toFixed(0) : '--';
-  $('tele-age').textContent = S.lastTele ? `Última telemetría hace ${ago(now - S.lastTele)}${S.tele.sim ? ' (simulada por el servidor)' : ''}.` : S.mqttUp ? 'Esperando telemetría de la placa...' : 'Sin telemetría: conecta con el servidor.';
+  $('m-motion').textContent = have ? motion.toFixed(1) : '--';
+  $('m-bright').textContent = have ? bright.toFixed(0) : '--';
+  $('tele-age').textContent = sim ? 'Simulación de la demostración: datos de ejemplo, solo en este panel.'
+    : S.lastTele ? `Última telemetría hace ${ago(now - S.lastTele)}${S.tele.sim ? ' (simulada por el servidor)' : ''}.` : S.mqttUp ? 'Esperando telemetría de la placa...' : 'Sin telemetría: conecta con el servidor.';
   document.title = st === 'unknown' ? 'Jefe IoT' : `${LABEL[st]} ${score} · Jefe IoT`;
-  scene?.update({ motion: S.haveMotion ? S.motion : 0, mood: st, score: S.score });
-  pushSpark(S.haveMotion ? S.motion : 0);
-  bossUI.tick(st);
+  scene?.update({ motion: have ? motion : 0, mood: st, score: S.score });
+  pushSpark(have ? motion : 0);
+  bossUI.tick(st, { record: !sim }); // lo simulado no se guarda en las estadisticas del dia
 }, 1000);
 
 // ---------- Sparkline de movimiento ----------
@@ -806,6 +819,60 @@ function pushSpark(v) {
 // ---------- Enlace a Grafana (dashboard con todas las graficas) ----------
 $('lnk-graf').href = IS_LOCAL ? `http://${location.hostname}:3000/d/jefe-iot` : `${location.protocol}//grafana.${location.host}/d/jefe-iot`;
 
+// ---------- Modo demostracion (pantalla de entrada + recorrido guiado) ----------
+// API minima y SOLO local para tour.js: ninguna de estas funciones publica en MQTT ni escribe en el servidor.
+let demoSeq = 0;
+const demoApi = {
+  log, toast,
+  hasScene: !!scene,
+  setView: (v) => scene?.setView(v),
+  getView: () => scene?.getView() || 'overview',
+  selectTab: (t) => selectTab(t),
+  getTab: () => TABS.find((b) => b.getAttribute('aria-selected') === 'true')?.dataset.tab || 'left',
+  // telemetria real de la placa (no la simulada por el servidor)
+  isLive: () => (fresh() && !S.tele.sim) || (S.httpOk && Date.now() - S.lastLive < 10000),
+  simStart() {
+    if (SIM.on) return;
+    SIM.saved = { score: S.score, boss: S.boss, mAvg, lowSince: S.lowSince };
+    Object.assign(SIM, { on: true, motion: 4, brightness: 128, absentMs: 3500 });
+    S.lowSince = 0;
+  },
+  simSet({ motion, brightness, snap = false } = {}) {
+    if (!SIM.on) return;
+    if (typeof motion === 'number') { SIM.motion = motion; if (snap) { mAvg = motion; if (motion >= 1.2) S.lowSince = 0; } }
+    if (typeof brightness === 'number') SIM.brightness = brightness;
+  },
+  simActive: () => SIM.on,
+  simStop() {
+    if (!SIM.on) return;
+    const s = SIM.saved || {};
+    SIM.on = false; SIM.saved = null;
+    S.score = s.score ?? S.score; S.boss = s.boss ?? S.boss; mAvg = s.mAvg ?? 0; S.lowSince = s.lowSince ?? 0;
+  },
+  // alerta o logro simulado: pasa por el mismo onEvent que las alertas reales (toast, sonido, logro, confeti)
+  event: (j) => onEvent({ severity: 'info', device: 'boss', ts: Date.now(), id: `demo-${Date.now()}-${++demoSeq}`, ...j }, { simulated: true }),
+  getPersonality: () => P8.cur,
+  setPersonalityLocal(p) {
+    demoPersonality ??= P8.cur;
+    renderPersonality(p, true);
+  },
+  restorePersonality() {
+    if (demoPersonality === null) return;
+    const p = demoPersonality;
+    demoPersonality = null;
+    renderPersonality(p);
+  },
+  persInfo: PERS_INFO,
+  alarm: () => bossUI.alarm(),
+  progress,
+  openReport() { progress.renderReport(); const d = $('report'); if (!d.open) d.show(); requestAnimationFrame(progress.renderReport); },
+  closeReport() { const d = $('report'); if (d.open) d.close(); },
+  focusPanel() {
+    const target = !$('mq-login').hidden ? ($('mq-user').value ? $('mq-pass') : $('mq-user')) : $('btn-tour');
+    target.focus({ preventScroll: true });
+  }
+};
+
 // ---------- Arranque ----------
 updateRemote();
 renderDevs();
@@ -813,3 +880,4 @@ startMqtt();
 camTick();
 refreshChips();
 log('Panel listo');
+initTour(demoApi);

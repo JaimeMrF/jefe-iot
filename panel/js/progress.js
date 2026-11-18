@@ -108,6 +108,7 @@ export function createProgress({ $, mk, bossUI, log }) {
 
   function onStats(j) {
     if (!j || typeof j !== 'object' || Array.isArray(j)) return;
+    if (demo) { demo.pending.stats = j; return; } // se aplica al salir de la demostracion
     stats = j; statsAt = Date.now();
     const unlocked = new Set((Array.isArray(j.achievements) ? j.achievements : []).filter((a) => a?.id && toDate(a.ts)).map((a) => a.id));
     if (prevUnlocked) for (const id of unlocked) if (!prevUnlocked.has(id) && !localUnlocked.has(id)) flash(id);
@@ -117,6 +118,7 @@ export function createProgress({ $, mk, bossUI, log }) {
   }
   function onTelemetry(j) {
     if (!j || typeof j !== 'object' || num(j.xp) == null || num(j.level) == null) return;
+    if (demo) { demo.pending.tele = j; return; }
     xpLive = { xp: j.xp, level: j.level }; xpLiveAt = Date.now();
     renderLevel();
   }
@@ -125,7 +127,8 @@ export function createProgress({ $, mk, bossUI, log }) {
     setTimeout(() => { fresh.delete(id); renderAchievements(); }, 12000);
   }
   // Evento "Logro: <nombre>": marcarlo ya (el stats retenido llega despues) y resaltar la tarjeta
-  function onAchievementEvent(name, at) {
+  function onAchievementEvent(name, at, { simulated = false } = {}) {
+    if (demo && !simulated) { demo.pending.achievements.push([name, at]); return; }
     const n = (name || '').trim().toLowerCase();
     const a = mergedAchievements().find((x) => x.name.toLowerCase() === n || x.id === n);
     if (a && !a.at) { localUnlocked.set(a.id, at || new Date()); flash(a.id); }
@@ -140,15 +143,46 @@ export function createProgress({ $, mk, bossUI, log }) {
   const isDay = (d) => d && typeof d === 'object' && typeof d.date === 'string';
   function onReport(j) {
     if (!j || typeof j !== 'object' || (!isDay(j.today) && !Array.isArray(j.week))) return;
+    if (demo) { demo.pending.report = j; return; }
     report = j; reportAt = Date.now();
     renderSummary();
     if ($('report').open) renderReport();
   }
-  const current = () => (report ? { src: 'server', r: report } : { src: 'local', r: bossUI.localReport() });
+  const simReport = () => !!(demo && demo.sample.report);
+  const current = () => (report ? { src: simReport() ? 'sim' : 'server', r: report } : { src: 'local', r: bossUI.localReport() });
+
+  // ---------- Modo demostracion: datos de ejemplo SOLO si el servidor no ha mandado los suyos ----------
+  // Se guarda todo el estado real y se restaura tal cual al salir; lo que llegue mientras tanto se aplica despues.
+  let demo = null;
+  function beginDemo(sample = {}) {
+    if (demo) return;
+    demo = {
+      real: { stats, statsAt, xpLive, xpLiveAt, report, reportAt, prevUnlocked, localUnlocked: new Map(localUnlocked) },
+      sample: { stats: !stats && !!sample.stats, report: !report && !!sample.report }, pending: { achievements: [] }
+    };
+    if (demo.sample.stats) { stats = sample.stats; statsAt = Date.now(); xpLive = null; prevUnlocked = null; }
+    if (demo.sample.report) { report = sample.report; reportAt = Date.now(); }
+    renderAll();
+  }
+  function endDemo() {
+    if (!demo) return;
+    const { real, pending } = demo;
+    demo = null;
+    ({ stats, statsAt, xpLive, xpLiveAt, report, reportAt, prevUnlocked } = real);
+    localUnlocked.clear(); for (const [k, v] of real.localUnlocked) localUnlocked.set(k, v);
+    fresh.clear();
+    renderAll();
+    for (const [name, at] of pending.achievements) onAchievementEvent(name, at);
+    if (pending.stats) onStats(pending.stats);
+    if (pending.tele) onTelemetry(pending.tele);
+    if (pending.report) onReport(pending.report);
+  }
+  const demoSample = () => !!(demo && (demo.sample.stats || demo.sample.report));
+  function renderAll() { renderLevel(); renderStreaks(); renderAchievements(); renderSummary(); if ($('report').open) renderReport(); }
 
   function renderSummary() {
     const t = report?.today;
-    $('rep-sum').textContent = isDay(t)
+    $('rep-sum').textContent = simReport() && isDay(t) ? `Simulación · hoy: ${fmtMin(t.focused_min)} enfocado · ${Math.round(t.focus_pct)} % de enfoque.` : isDay(t)
       ? `Hoy: ${fmtMin(t.focused_min)} enfocado · ${num(t.focus_pct) != null ? Math.round(t.focus_pct) + ' %' : '–'} de enfoque.`
       : 'El reporte del servidor aún no llega; se muestra el de este navegador.';
   }
@@ -174,9 +208,11 @@ export function createProgress({ $, mk, bossUI, log }) {
     const today = isDay(r.today) ? r.today : null;
     const week = weekOf(r);
     const when = toDate(r.ts);
-    $('rep-src').textContent = src === 'server' ? 'Servidor' : 'Este navegador';
+    $('rep-src').textContent = src === 'sim' ? 'SIMULACIÓN' : src === 'server' ? 'Servidor' : 'Este navegador';
     $('rep-src').className = 'badge ' + (src === 'server' ? 'ok' : 'warn');
-    $('rep-meta').textContent = src === 'server'
+    $('rep-meta').textContent = src === 'sim'
+      ? 'Datos de ejemplo de la demostración: el servidor aún no ha publicado un reporte. No se guardan en ningún lado.'
+      : src === 'server'
       ? `Actualizado ${when ? when.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : 'hace poco'}. El servidor lo recalcula cada minuto.`
       : 'El servidor todavía no publica reportes: estos datos salen de lo que este navegador registró (sin puntaje medio ni xp).';
     // Hoy
@@ -260,8 +296,8 @@ export function createProgress({ $, mk, bossUI, log }) {
   function exportReport(kind) {
     const { src, r } = current();
     const date = (isDay(r.today) && r.today.date) || new Date().toISOString().slice(0, 10);
-    const name = `jefe-reporte-${date}.${kind}`;
-    if (kind === 'json') download(name, 'application/json', JSON.stringify({ source: src === 'server' ? 'servidor' : 'navegador', ...r }, null, 2));
+    const name = `jefe-reporte${src === 'sim' ? '-simulacion' : ''}-${date}.${kind}`;
+    if (kind === 'json') download(name, 'application/json', JSON.stringify({ source: src === 'sim' ? 'simulacion' : src === 'server' ? 'servidor' : 'navegador', ...r }, null, 2));
     else {
       const rows = weekOf(r);
       if (isDay(r.today) && !rows.some((d) => d.date === r.today.date)) rows.push(r.today);
@@ -281,5 +317,5 @@ export function createProgress({ $, mk, bossUI, log }) {
   new ResizeObserver(() => { if (!dlg.open) return; const { r } = current(); drawWeek(weekOf(r), r.today?.date); }).observe($('rep-week'));
 
   renderLevel(); renderStreaks(); renderAchievements(); renderSummary();
-  return { onStats, onTelemetry, onReport, onAchievementEvent, renderReport };
+  return { onStats, onTelemetry, onReport, onAchievementEvent, renderReport, beginDemo, endDemo, demoSample };
 }

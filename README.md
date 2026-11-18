@@ -32,6 +32,10 @@ En desarrollo Mosquitto acepta conexiones **anónimas** (solo para la LAN). Prod
 
 Para apagar sin perder datos: `docker compose down` (con `-v` se borran InfluxDB, Grafana y el estado del bridge).
 
+## Demostración guiada
+
+Elige **Demostración** al abrir el panel o pulsa **Demo** en su barra. Usa las flechas para avanzar o retroceder, **N** para ver el guion, **F** para pantalla completa y **Esc** dos veces para salir. Puedes abrir directamente el recorrido con `?modo=demo` o ir al panel con `?modo=probar`.
+
 ## Dashboard de Grafana
 ```bash
 python tools/gen_dashboard.py                    # regenera grafana/provisioning/dashboards/jefe.json
