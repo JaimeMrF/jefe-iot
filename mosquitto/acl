@@ -12,8 +12,10 @@ topic write jefe/esp32cam-01/snap
 topic write jefe/esp32cam-01/live
 topic read jefe/esp32cam-01/cmd
 
-# El panel (navegador) ve todo y solo puede mandar comandos
-user panel
+# El panel (navegador) ve todo y solo puede mandar comandos.
+# __PANEL_USER__ lo sustituye entrypoint.sh por MQTT_PANEL_USER (por defecto "panel").
+# Incluye jefe/provision/<id>: credenciales MQTT de la placa para aprovisionarla por BLE sin escribirlas.
+user __PANEL_USER__
 topic read jefe/#
 topic write jefe/+/cmd
 

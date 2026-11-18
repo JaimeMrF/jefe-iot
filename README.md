@@ -46,6 +46,26 @@ cd firmware && python -m platformio run -t upload   # GPIO0 a GND mientras sube
 ```
 Después abre el panel, conecta por Bluetooth a **JefeCAM** y envía WiFi + servidor MQTT.
 
+### Conectar la placa en producción (3 pasos)
+1. Abre `https://<tu dominio>` en **Chrome o Edge** (Web Bluetooth) y entra con tu usuario del panel
+   (`MQTT_PANEL_USER` / `MQTT_PANEL_PASS`; ver abajo).
+2. Enciende la ESP32-CAM cerca del PC y pulsa **Conectar por Bluetooth** → elige **JefeCAM**.
+3. Pulsa **Buscar redes**, elige tu WiFi (**2.4 GHz**), escribe su clave y pulsa **Enviar a la placa**.
+
+El servidor, el puerto 443, TLS y el usuario/clave MQTT de la placa se rellenan solos: el bridge los publica
+en `jefe/provision/esp32cam-01`, que solo puede leer el usuario del panel (la placa no). Si el aviso verde
+"automáticos" no aparece, revisa que hayas iniciado sesión. Los campos siguen disponibles en "Servidor MQTT (avanzado)".
+
+### Usuario del panel
+Se define con los secrets **opcionales** de GitHub `PANEL_USER` y `PANEL_PASS`: en cada deploy se escriben en
+`/opt/jefe-iot/.env` del VPS (por stdin, nunca en logs) como `MQTT_PANEL_USER` / `MQTT_PANEL_PASS`. Sin esos secrets
+se usa lo que ya haya en el `.env` (por defecto el usuario `panel`). Para cambiarlos:
+```bash
+gh secret set PANEL_USER     # pega el usuario
+gh secret set PANEL_PASS     # pega la clave
+gh workflow run ci-cd.yml    # o haz push a main
+```
+
 ## Producción
 Ver [docs/DEPLOY.md](docs/DEPLOY.md). Cada `git push` a `main` valida, prueba (incluida una prueba de integración con el stack
 completo) y, si todo pasa, despliega en el VPS.

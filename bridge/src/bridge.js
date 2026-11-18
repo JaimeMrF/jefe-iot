@@ -50,6 +50,8 @@ function loadConfig(env = process.env) {
     lon: coordEnv(env.LON, '-74.072', 180),
     datasetsDir: resolveDatasetsDir(env.DATASETS_DIR),
     azureKey: env.AZURE_MAPS_KEY || '',
+    provisionUser: (env.PROVISION_ESP_USER || '').trim(),
+    provisionPass: env.PROVISION_ESP_PASS || '',
     realTimeoutMs: numEnv(env.REAL_TIMEOUT_S, 90, 15, 3600) * 1000,
     healthPort: numEnv(env.HEALTH_PORT, 8081, 0, 65535),
     healthHost: env.HEALTH_HOST || '0.0.0.0',
@@ -359,6 +361,13 @@ function createBridge({
     return r;
   }
 
+  // Credenciales MQTT de la placa para el panel: la ACL solo deja leer jefe/provision/# al usuario del panel
+  // (la placa no puede). Asi el aprovisionamiento por BLE solo pide el WiFi.
+  function publishProvision() {
+    if (!cfg.provisionUser || !cfg.provisionPass) return;
+    pub('jefe/provision/esp32cam-01', { user: cfg.provisionUser, pass: cfg.provisionPass }, { retain: true, qos: 1 });
+  }
+
   // ---------- Ciclo de vida ----------
   function onConnect() {
     log.info('MQTT conectado', { url: cfg.mqttUrl, clientId: cfg.clientId });
@@ -370,6 +379,7 @@ function createBridge({
       publishState(dev);
     }
     if (source.mode) pub('jefe/bridge/mode', source.mode, { retain: true, qos: 1 });
+    publishProvision();
     try { publishBossState(); publishStats(); publishReport(); } catch (e) { log.error('error publicando estado del jefe', { err: e }); }
   }
 

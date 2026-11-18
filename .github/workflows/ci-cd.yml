@@ -156,5 +156,16 @@ jobs:
             --exclude 'firmware/.pio' --exclude 'node_modules' \
             ./ "$VPS_USER@$VPS_HOST:/opt/jefe-iot/"
 
+      - name: Credenciales opcionales en el .env del VPS
+        # Secrets opcionales PANEL_USER / PANEL_PASS: usuario y clave con los que entras al panel.
+        # Van por stdin (no aparecen en logs ni en la lista de procesos del VPS).
+        env:
+          PANEL_USER: ${{ secrets.PANEL_USER }}
+          PANEL_PASS: ${{ secrets.PANEL_PASS }}
+        run: |
+          if [ -z "$PANEL_USER" ] && [ -z "$PANEL_PASS" ]; then echo "Sin credenciales del panel en secrets: se deja el .env como esta"; exit 0; fi
+          printf 'MQTT_PANEL_USER=%s\nMQTT_PANEL_PASS=%s\n' "$PANEL_USER" "$PANEL_PASS" \
+            | ssh -p "${VPS_PORT:-22}" "$VPS_USER@$VPS_HOST" 'bash /opt/jefe-iot/deploy/set-env.sh'
+
       - name: Desplegar
         run: ssh -p "${VPS_PORT:-22}" "$VPS_USER@$VPS_HOST" 'bash /opt/jefe-iot/deploy/deploy.sh'

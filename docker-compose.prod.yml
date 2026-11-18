@@ -61,6 +61,7 @@ services:
     environment:
       DOMAIN: ${DOMAIN}
       MQTT_ESP_PASS: ${MQTT_ESP_PASS}
+      MQTT_PANEL_USER: ${MQTT_PANEL_USER:-panel}
       MQTT_PANEL_PASS: ${MQTT_PANEL_PASS}
       MQTT_BACKEND_PASS: ${MQTT_BACKEND_PASS}
     volumes:
@@ -133,6 +134,9 @@ services:
       MQTT_USER: backend
       MQTT_PASS: ${MQTT_BACKEND_PASS}
       AZURE_MAPS_KEY: ${AZURE_MAPS_KEY}
+      # Credenciales de la placa que el panel (solo el usuario del panel) usa al aprovisionar por BLE
+      PROVISION_ESP_USER: esp32
+      PROVISION_ESP_PASS: ${MQTT_ESP_PASS}
       # Persistencia (xp, logros, reportes, personalidad) en el volumen bridge-data
       DATA_DIR: /data
       TZ: ${TZ:-America/Bogota}

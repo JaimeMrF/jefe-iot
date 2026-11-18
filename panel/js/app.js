@@ -291,10 +291,25 @@ fetch('config.json', { cache: 'no-store' })
   .then((c) => { if (c && typeof c === 'object') CFG = { ...CFG, ...c }; })
   .catch(() => { /* sin config: valores por defecto */ })
   .finally(applyDefaults);
+// Credenciales MQTT de la placa que publica el servidor (solo las puede leer el usuario del panel).
+// Se guardan solo en memoria: nunca en localStorage.
+let PROV = null;
+function onProvision(j) {
+  PROV = j && typeof j === 'object' && typeof j.user === 'string' && j.user && typeof j.pass === 'string' && j.pass ? { user: j.user, pass: j.pass } : null;
+  refreshProvAuto();
+}
+function refreshProvAuto() {
+  const auto = !!(PROV && $('mqtt').value.trim());
+  $('prov-auto').hidden = !auto;
+  $('srv-adv').open = !auto;
+  $('muser').placeholder = PROV ? `${PROV.user} (automático)` : 'esp32';
+  $('mpass').placeholder = PROV ? 'automática' : 'clave';
+}
 function applyDefaults() {
   $('mqtt').value = store.get('mqtt') || CFG.mqttHost || '';
   $('port').value = store.get('mport') || CFG.mqttPort || 1883;
   $('mtls').checked = store.get('mtls') ? store.get('mtls') === '1' : !!CFG.tls;
+  refreshProvAuto();
 }
 $('mtls').onchange = () => { if ($('mtls').checked && +$('port').value === 1883) $('port').value = 443; if (!$('mtls').checked && +$('port').value === 443) $('port').value = 1883; };
 $('btn-eye').onclick = () => {
@@ -319,7 +334,7 @@ function renderNets(list) {
     b.onclick = () => {
       $('ssid').value = n.s;
       ul.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-      (n.e ? $('pass') : $('mqtt')).focus();
+      (n.e ? $('pass') : $('srv-adv').open ? $('mqtt') : $('btn-send')).focus();
     };
     return mk('li', {}, b);
   }));
@@ -348,7 +363,11 @@ $('btn-send').onclick = async () => {
   if (!host) return bad('mqtt', 'Falta el servidor MQTT (dominio del VPS o IP del PC).');
   if (!/^[\w.-]+$/.test(host)) return bad('mqtt', errText('invalid_mqtt'));
   if (port < 1 || port > 65535) return bad('port', errText('invalid_port'));
-  const user = $('muser').value.trim(), mpass = $('mpass').value, tls = $('mtls').checked;
+  let user = $('muser').value.trim(), mpass = $('mpass').value;
+  const tls = $('mtls').checked;
+  // Credenciales automaticas del servidor (solo si el usuario no escribio otras)
+  if (PROV && !user && !mpass) { user = PROV.user; mpass = PROV.pass; }
+  else if (PROV && user === PROV.user && !mpass) mpass = PROV.pass;
   if (tls && !user) return bad('muser', 'Con TLS necesitas usuario y clave MQTT de la placa.');
   store.set('ssid', ssid); store.set('mqtt', host); store.set('mport', port); store.set('mtls', tls ? '1' : '0'); store.set('muser_dev', user);
   const btn = $('btn-send');
@@ -440,7 +459,7 @@ function startMqtt() {
     mq.retry = 0; S.mqttUp = true; setMq('up');
     log('Servidor MQTT conectado');
     // jefe/boss/state (personalidad) ya entra por jefe/+/state
-    c.subscribe([`jefe/${DEVICE}/#`, 'jefe/+/state', 'jefe/+/event', 'jefe/boss/telemetry', 'jefe/boss/stats', 'jefe/boss/report', 'jefe/bridge/mode', 'jefe/bridge/status'], (err) => { if (err) log('MQTT: suscripción rechazada', 'e'); });
+    c.subscribe([`jefe/${DEVICE}/#`, 'jefe/+/state', 'jefe/+/event', 'jefe/boss/telemetry', 'jefe/boss/stats', 'jefe/boss/report', 'jefe/bridge/mode', 'jefe/bridge/status', `jefe/provision/${DEVICE}`], (err) => { if (err) log('MQTT: suscripción rechazada', 'e'); });
     requestStream(true);
     sendPersonality();
     renderDevs();
@@ -491,6 +510,7 @@ function onMessage(topic, buf) {
   if (t === 'snap') { if (id === DEVICE) onSnap(buf); return; }
   const raw = buf.toString();
   let j; try { j = JSON.parse(raw); } catch { j = raw; }
+  if (id === 'provision') { if (t === DEVICE) onProvision(j); return; }
   if (id === 'bridge') {
     if (t === 'mode') S.bridgeMode = raw;
     else if (t === 'status') { const up = raw === 'online'; if (S.bridgeUp === true && !up) toast('Bridge desconectado', 'El servidor de lógica no responde: sin alertas ni gemelos.', { sev: 'warning' }); S.bridgeUp = up; }

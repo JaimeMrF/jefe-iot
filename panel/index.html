@@ -93,6 +93,9 @@
           <input id="pass" type="password" placeholder="Clave WiFi" autocomplete="off" maxlength="63" aria-label="Clave WiFi">
           <button id="btn-eye" class="ghost small" type="button" aria-pressed="false" aria-label="Mostrar clave">Ver</button>
         </div>
+        <p id="prov-auto" class="msg ok" role="status" hidden>Servidor y credenciales de la placa: automáticos. Solo elige tu WiFi y escribe su clave.</p>
+        <details id="srv-adv" class="adv" open>
+          <summary>Servidor MQTT (avanzado)</summary>
         <div class="grid2">
           <label class="field"><span class="lbl">Servidor MQTT (dominio o IP)</span><input id="mqtt" type="text" placeholder="mqtt.tudominio.com" autocomplete="off" inputmode="url"></label>
           <label class="field"><span class="lbl">Puerto</span><input id="port" type="number" value="1883" min="1" max="65535" inputmode="numeric"></label>
@@ -102,6 +105,7 @@
           <label class="field"><span class="lbl">Clave MQTT de la placa</span><input id="mpass" type="password" placeholder="clave" autocomplete="off"></label>
         </div>
         <label class="tog"><input type="checkbox" id="mtls"><span>Cifrar con TLS (obligatorio en el VPS, puerto 443)</span></label>
+        </details>
         <button id="btn-send" class="primary" type="button">Enviar a la placa</button>
         <div id="prov-msg" class="msg" role="status" hidden></div>
         <details class="adv">
