@@ -645,7 +645,8 @@ void mqttTick() {
   mqtt.setServer(cfg.mqttHost.c_str(), cfg.mqttPort);
   const char *u = cfg.mqttUser.length() ? cfg.mqttUser.c_str() : nullptr;
   const char *p = cfg.mqttPass.length() ? cfg.mqttPass.c_str() : nullptr;
-  LOGI("mqtt", "conectando a %s:%u tls=%d heap=%u", cfg.mqttHost.c_str(), cfg.mqttPort, cfg.mqttTls, ESP.getFreeHeap());
+  LOGI("mqtt", "conectando a %s:%u tls=%d heap=%u unix=%lld",
+       cfg.mqttHost.c_str(), cfg.mqttPort, cfg.mqttTls, ESP.getFreeHeap(), (long long)time(nullptr));
   esp_task_wdt_reset();  // la conexion (DNS + TCP + TLS) puede tardar varios segundos
   bool ok = mqtt.connect(DEVICE_ID, u, p, T_STATUS, 1, true, "offline");
   esp_task_wdt_reset();

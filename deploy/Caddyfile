@@ -44,6 +44,16 @@ grafana.{$DOMAIN} {
 
 # Solo existe para que Caddy obtenga el certificado que usa Mosquitto (llega por el 443 via SNI)
 mqtt.{$DOMAIN} {
+	# Compatibilidad con el cliente TLS del firmware ESP32-CAM.
+	tls {
+		key_type rsa2048
+		issuer acme {
+			disable_tlsalpn_challenge
+			preferred_chains {
+				root_common_name "ISRG Root X1"
+			}
+		}
+	}
 	import seguridad
 	respond "mqtt ok" 200
 }
