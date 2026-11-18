@@ -4,5 +4,6 @@ providers:
     folder: Jefe IoT
     type: file
     allowUiUpdates: true
+    updateIntervalSeconds: 30
     options:
       path: /etc/grafana/provisioning/dashboards

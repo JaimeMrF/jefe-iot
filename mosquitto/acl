@@ -1,18 +1,22 @@
-# La placa solo publica sus datos y lee sus comandos
-user esp32
-topic write jefe/+/telemetry
-topic write jefe/+/status
-topic write jefe/+/state
-topic write jefe/+/info
-topic write jefe/+/snap
-topic write jefe/+/live
-topic read jefe/+/cmd
+# ACL de produccion (mosquitto.prod.conf). Sin acceso anonimo: cada usuario ve solo lo suyo.
+# Si agregas otra placa real, copia el bloque de esp32 con su propio usuario y su <id>.
 
-# El panel ve todo y solo puede mandar comandos
+# La placa real (esp32cam-01) solo publica SUS datos y lee SUS comandos.
+# Antes era jefe/+/...: con la clave de la placa se podia suplantar a cualquier dispositivo.
+user esp32
+topic write jefe/esp32cam-01/telemetry
+topic write jefe/esp32cam-01/status
+topic write jefe/esp32cam-01/state
+topic write jefe/esp32cam-01/info
+topic write jefe/esp32cam-01/snap
+topic write jefe/esp32cam-01/live
+topic read jefe/esp32cam-01/cmd
+
+# El panel (navegador) ve todo y solo puede mandar comandos
 user panel
 topic read jefe/#
 topic write jefe/+/cmd
 
-# Telegraf / Node-RED
+# Servicios internos: bridge (publica gemelos, APIs, datasets, jefe y alertas) y Telegraf (lee)
 user backend
 topic readwrite jefe/#

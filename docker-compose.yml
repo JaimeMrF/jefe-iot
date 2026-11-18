@@ -1,21 +1,41 @@
 name: jefe-iot
 
+# Desarrollo local. Produccion: docker-compose.prod.yml
+# Versiones fijadas: actualizar a proposito (y probar), nunca por accidente con un "pull".
+
+# Logs rotados: maximo 3 archivos de 10 MB por contenedor (sin esto el disco se llena con el tiempo)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   mosquitto:
-    image: eclipse-mosquitto:2
+    image: eclipse-mosquitto:2.0.20
     restart: unless-stopped
+    logging: *logging
     ports:
       - "1883:1883"   # MQTT (la ESP32 se conecta aqui por la LAN)
       - "9001:9001"   # MQTT sobre WebSocket (panel web)
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto-data:/mosquitto/data
+    healthcheck:
+      # Conecta y publica en un topico que nadie consume (jefe/healthcheck/ping)
+      test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -p 1883 -t jefe/healthcheck/ping -m 1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 128m
 
   influxdb:
-    image: influxdb:2.7
+    image: influxdb:2.7.12
     restart: unless-stopped
+    logging: *logging
     ports:
-      - "8086:8086"
+      - "127.0.0.1:8086:8086"   # solo desde este PC
     environment:
       DOCKER_INFLUXDB_INIT_MODE: setup
       DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USER}
@@ -23,13 +43,25 @@ services:
       DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG}
       DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET}
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN}
+      # Solo aplica la primera vez (volumen vacio). Despues: ver docs/DEPLOY.md, "Retencion"
+      DOCKER_INFLUXDB_INIT_RETENTION: ${INFLUX_RETENTION:-90d}
     volumes:
       - influx-data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping", "--host", "http://127.0.0.1:8086"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    mem_limit: 1g
 
   telegraf:
-    image: telegraf:1.32
+    image: telegraf:1.32.3
     restart: unless-stopped
-    depends_on: [mosquitto, influxdb]
+    logging: *logging
+    depends_on:
+      mosquitto: { condition: service_healthy }
+      influxdb: { condition: service_healthy }
     environment:
       INFLUX_TOKEN: ${INFLUX_TOKEN}
       INFLUX_ORG: ${INFLUX_ORG}
@@ -38,56 +70,96 @@ services:
       MQTT_PASS: ""
     volumes:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    mem_limit: 256m
 
   bridge:
     build: ./bridge
     restart: unless-stopped
-    depends_on: [mosquitto]
+    logging: *logging
+    user: node            # la imagen node:*-alpine trae este usuario sin privilegios
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      mosquitto: { condition: service_healthy }
     environment:
       MQTT_URL: mqtt://mosquitto:1883
       MQTT_USER: ""
       MQTT_PASS: ""
       AZURE_MAPS_KEY: ${AZURE_MAPS_KEY}
+      # Persistencia (xp, logros, reportes, personalidad) en el volumen bridge-data
+      DATA_DIR: /data
+      TZ: ${TZ:-America/Bogota}
+      # Telegram (opcional: si falta el token o el chat_id queda desactivado)
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      TELEGRAM_MIN_SEVERITY: ${TELEGRAM_MIN_SEVERITY:-warning}
+      REPORT_HOUR: ${REPORT_HOUR:-18}
+      REPORT_WEEKDAY: ${REPORT_WEEKDAY:-5}
     volumes:
       - ./datasets:/datasets:ro
+      - bridge-data:/data
+    # healthcheck: lo define bridge/Dockerfile (GET /health en el puerto interno 8081, no publicado)
+    mem_limit: 256m
 
   grafana:
     image: grafana/grafana:11.3.0
     restart: unless-stopped
-    depends_on: [influxdb]
+    logging: *logging
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      influxdb: { condition: service_healthy }
     ports:
       - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
       GF_SERVER_ROOT_URL: ${PUBLIC_GRAFANA_URL}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       INFLUX_TOKEN: ${INFLUX_TOKEN}
       INFLUX_ORG: ${INFLUX_ORG}
       INFLUX_BUCKET: ${INFLUX_BUCKET}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    mem_limit: 512m
 
   # Panel 3D (Bluetooth + camara). http://localhost:8080  (localhost cuenta como contexto seguro para Web Bluetooth)
   panel:
-    image: nginx:alpine
+    image: nginx:1.30-alpine
     restart: unless-stopped
+    logging: *logging
     ports:
       - "8080:80"
     volumes:
       - ./panel:/usr/share/nginx/html:ro
       - ./panel/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 64m
 
-  # URL publica: docker compose --profile tunnel up -d
+  # URL publica alternativa (sin VPS): docker compose --profile tunnel up -d
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2024.12.2
     profiles: [tunnel]
     restart: unless-stopped
+    logging: *logging
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    mem_limit: 128m
 
 volumes:
   mosquitto-data:
   influx-data:
   grafana-data:
+  bridge-data:

@@ -44,6 +44,11 @@ MQTT_ESP_PASS=$(r 10)
 MQTT_PANEL_PASS=$(r 10)
 MQTT_BACKEND_PASS=$(r 12)
 AZURE_MAPS_KEY=
+TZ=America/Bogota
+INFLUX_RETENTION=90d
+# Telegram opcional (docs/DEPLOY.md, seccion 7)
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
 ENV
   chown "$USER_CI:$USER_CI" "$APP/.env"; chmod 600 "$APP/.env"
   echo ">> .env creado en $APP/.env (ahi estan tus claves; guardalas)."

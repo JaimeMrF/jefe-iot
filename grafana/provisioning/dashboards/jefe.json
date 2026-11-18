@@ -1,6 +1,7 @@
 {
  "uid": "jefe-iot",
  "title": "Jefe IoT",
+ "description": "El jefe virtual, la ESP32-CAM real, gemelos digitales, APIs, datasets UCI y alertas.",
  "tags": [
   "iot",
   "jefe"
@@ -32,6 +33,7 @@
   {
    "type": "gauge",
    "title": "Puntaje",
+   "description": "Puntaje de productividad 0-100 que calcula el bridge a partir del movimiento de la ESP32-CAM. Rojo < 40, naranja < 70, verde >= 70.",
    "id": 2,
    "datasource": {
     "type": "influxdb",
@@ -50,7 +52,7 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"score\"))\n  |> last()"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"score\"))\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
@@ -74,8 +76,12 @@
        }
       ]
      },
+     "color": {
+      "mode": "thresholds"
+     },
      "min": 0,
-     "max": 100
+     "max": 100,
+     "decimals": 0
     },
     "overrides": []
    },
@@ -87,14 +93,14 @@
      "fields": "",
      "values": false
     },
-    "colorMode": "value",
-    "graphMode": "area",
-    "textMode": "auto"
+    "showThresholdMarkers": true,
+    "showThresholdLabels": false
    }
   },
   {
    "type": "stat",
    "title": "Estado",
+   "description": "Estado actual segun el jefe: ENFOCADO (poco movimiento con presencia), DISTRAIDO (mucho movimiento) o AUSENTE (sin movimiento).",
    "id": 3,
    "datasource": {
     "type": "influxdb",
@@ -113,7 +119,7 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"state\"))\n  |> last()"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"state\"))\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
@@ -125,15 +131,18 @@
        "options": {
         "1": {
          "text": "ENFOCADO",
-         "color": "green"
+         "color": "green",
+         "index": 0
         },
         "2": {
          "text": "DISTRAIDO",
-         "color": "red"
+         "color": "red",
+         "index": 1
         },
         "3": {
          "text": "AUSENTE",
-         "color": "blue"
+         "color": "blue",
+         "index": 2
         }
        }
       }
@@ -142,10 +151,13 @@
       "mode": "absolute",
       "steps": [
        {
-        "color": "green",
+        "color": "#8e8e8e",
         "value": null
        }
       ]
+     },
+     "color": {
+      "mode": "thresholds"
      }
     },
     "overrides": []
@@ -158,14 +170,16 @@
      "fields": "",
      "values": false
     },
-    "colorMode": "value",
-    "graphMode": "area",
-    "textMode": "auto"
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center"
    }
   },
   {
    "type": "stat",
    "title": "Fuente de datos",
+   "description": "REAL si la ESP32-CAM esta enviando telemetria; SIMULADA si no llega nada en 90 s y el bridge simula la camara (campo sim=1).",
    "id": 4,
    "datasource": {
     "type": "influxdb",
@@ -184,7 +198,7 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"sim\"))\n  |> last()"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"sim\"))\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
@@ -196,11 +210,13 @@
        "options": {
         "0": {
          "text": "REAL",
-         "color": "green"
+         "color": "green",
+         "index": 0
         },
         "1": {
          "text": "SIMULADA",
-         "color": "orange"
+         "color": "orange",
+         "index": 1
         }
        }
       }
@@ -209,10 +225,13 @@
       "mode": "absolute",
       "steps": [
        {
-        "color": "green",
+        "color": "#8e8e8e",
         "value": null
        }
       ]
+     },
+     "color": {
+      "mode": "thresholds"
      }
     },
     "overrides": []
@@ -225,15 +244,16 @@
      "fields": "",
      "values": false
     },
-    "colorMode": "value",
-    "graphMode": "area",
-    "textMode": "auto"
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center"
    }
   },
   {
    "type": "timeseries",
    "title": "Puntaje y movimiento (promedio movil)",
-   "description": "",
+   "description": "Puntaje del jefe y promedio movil del movimiento detectado (0-100). Las lineas punteadas marcan los umbrales 40 y 70.",
    "id": 5,
    "datasource": {
     "type": "influxdb",
@@ -252,35 +272,104 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"score\" or r._field == \"motion_avg\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"score\" or r._field == \"motion_avg\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
-     "unit": "",
+     "unit": "percent",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
-     }
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 40
+       },
+       {
+        "color": "green",
+        "value": 70
+       }
+      ]
+     },
+     "min": 0,
+     "max": 100
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "score"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Puntaje"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "green"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "motion_avg"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Movimiento promedio"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Minutos acumulados por estado",
-   "description": "",
+   "description": "Minutos acumulados en cada estado durante el dia (zona horaria TZ del bridge).",
    "id": 6,
    "datasource": {
     "type": "influxdb",
@@ -288,7 +377,7 @@
    },
    "gridPos": {
     "h": 7,
-    "w": 12,
+    "w": 8,
     "x": 0,
     "y": 7
    },
@@ -299,35 +388,105 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"focused_min\" or r._field == \"distracted_min\" or r._field == \"absent_min\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"focused_min\" or r._field == \"distracted_min\" or r._field == \"absent_min\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "m",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
-     }
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "decimals": 1
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "focused_min"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Enfocado"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "green"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "distracted_min"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Distraido"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "absent_min"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Ausente"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "blue"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "% de enfoque acumulado",
-   "description": "",
+   "description": "Porcentaje del tiempo con presencia que se paso ENFOCADO.",
    "id": 7,
    "datasource": {
     "type": "influxdb",
@@ -335,8 +494,8 @@
    },
    "gridPos": {
     "h": 7,
-    "w": 12,
-    "x": 12,
+    "w": 8,
+    "x": 8,
     "y": 7
    },
    "targets": [
@@ -346,37 +505,186 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"focus_pct\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"focus_pct\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "percent",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 40
+       },
+       {
+        "color": "green",
+        "value": 70
+       }
+      ]
      },
      "min": 0,
      "max": 100
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "focus_pct"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Enfoque"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "green"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
+    }
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Experiencia y nivel",
+   "description": "Gamificacion: +1 XP por minuto enfocado y +5 por cada bloque de 25 min seguidos. Nivel n al llegar a 100*n*(n+1)/2 XP. Los logros aparecen como alertas 'logro' y como anotaciones.",
+   "id": 8,
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influx"
+   },
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 16,
+    "y": 7
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influx"
+     },
+     "refId": "A",
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"boss\" and (r._field == \"xp\" or r._field == \"level\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
+      "spanNulls": true,
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "xp"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "XP"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "purple"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "level"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Nivel (eje derecho)"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "yellow"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "none"
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "row",
    "title": "Dispositivo REAL: ESP32-CAM (MQTT/TLS + BLE + HTTP). Si la placa no esta conectada se muestra la simulacion",
-   "id": 8,
+   "id": 9,
    "collapsed": false,
    "gridPos": {
     "h": 1,
@@ -389,8 +697,8 @@
   {
    "type": "timeseries",
    "title": "Movimiento y brillo de la imagen",
-   "description": "motion 0-100 (diferencia entre frames), brightness 0-255",
-   "id": 9,
+   "description": "motion 0-100: diferencia entre frames consecutivos. brightness 0-255: brillo medio de la imagen. Fuente: jefe/esp32cam-01/telemetry.",
+   "id": 10,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -408,36 +716,86 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"motion\" or r._field == \"brightness\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"motion\" or r._field == \"brightness\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "motion"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Movimiento (0-100)"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "brightness"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Brillo (0-255)"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "yellow"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Senal WiFi",
-   "description": "",
-   "id": 10,
+   "description": "Intensidad de la senal WiFi. Mejor que -67 dBm: buena; entre -80 y -67: aceptable; peor que -80: reconexiones probables.",
+   "id": 11,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -455,36 +813,84 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"rssi\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"rssi\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "dBm",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": -80
+       },
+       {
+        "color": "green",
+        "value": -67
+       }
+      ]
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "rssi"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "RSSI"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "blue"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Temperatura del chip",
-   "description": "",
-   "id": 11,
+   "description": "Sensor interno del ESP32 (aproximado, +/- 5 C). Por encima de 80 C conviene ventilar la placa.",
+   "id": 12,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -502,36 +908,84 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"chip_temp\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"chip_temp\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "celsius",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 65
+       },
+       {
+        "color": "red",
+        "value": 80
+       }
+      ]
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "chip_temp"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Chip"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Memoria libre (heap)",
-   "description": "",
-   "id": 12,
+   "description": "Memoria RAM interna libre. Si baja sostenidamente hay una fuga; por debajo de ~30 KB la camara o el TLS pueden fallar.",
+   "id": 13,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -549,36 +1003,80 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"heap\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"heap\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "bytes",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 30000
+       }
+      ]
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "heap"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Heap libre"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "purple"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Tiempo encendida",
-   "description": "",
-   "id": 13,
+   "description": "Segundos desde el ultimo arranque de la placa. Una caida a 0 indica un reinicio (revisa el motivo en jefe/esp32cam-01/info).",
+   "id": 14,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -596,35 +1094,67 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"uptime_s\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"uptime_s\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "s",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "uptime_s"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Uptime"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#5ad1e6"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "stat",
    "title": "Camara OK",
-   "id": 14,
+   "description": "1 si el sensor de la camara se inicializo y captura frames; 0 si fallo (la placa reintenta sola).",
+   "id": 15,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -642,7 +1172,7 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"cam_ok\"))\n  |> last()"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"cam_ok\"))\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
@@ -653,12 +1183,14 @@
        "type": "value",
        "options": {
         "0": {
-         "text": "NO",
-         "color": "red"
+         "text": "FALLA",
+         "color": "red",
+         "index": 0
         },
         "1": {
-         "text": "SI",
-         "color": "green"
+         "text": "OK",
+         "color": "green",
+         "index": 1
         }
        }
       }
@@ -675,6 +1207,9 @@
         "value": 1
        }
       ]
+     },
+     "color": {
+      "mode": "thresholds"
      }
     },
     "overrides": []
@@ -687,15 +1222,17 @@
      "fields": "",
      "values": false
     },
-    "colorMode": "value",
-    "graphMode": "area",
-    "textMode": "auto"
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center"
    }
   },
   {
    "type": "stat",
    "title": "Reconexiones WiFi",
-   "id": 15,
+   "description": "Reconexiones WiFi desde el arranque. Muchas reconexiones = mala senal o router saturado.",
+   "id": 16,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -713,7 +1250,7 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"reconnects\"))\n  |> last()"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"esp32cam-01\" and (r._field == \"reconnects\"))\n  |> last()\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
@@ -726,9 +1263,21 @@
        {
         "color": "green",
         "value": null
+       },
+       {
+        "color": "orange",
+        "value": 3
+       },
+       {
+        "color": "red",
+        "value": 10
        }
       ]
-     }
+     },
+     "color": {
+      "mode": "thresholds"
+     },
+     "decimals": 0
     },
     "overrides": []
    },
@@ -740,15 +1289,16 @@
      "fields": "",
      "values": false
     },
-    "colorMode": "value",
-    "graphMode": "area",
-    "textMode": "auto"
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center"
    }
   },
   {
    "type": "row",
    "title": "Gemelos digitales (MQTT) con retroceso: apagar, ajustar y calibrar desde el panel",
-   "id": 16,
+   "id": 17,
    "collapsed": false,
    "gridPos": {
     "h": 1,
@@ -761,54 +1311,7 @@
   {
    "type": "timeseries",
    "title": "Camara virtual de la sala",
-   "description": "",
-   "id": 17,
-   "datasource": {
-    "type": "influxdb",
-    "uid": "influx"
-   },
-   "gridPos": {
-    "h": 7,
-    "w": 8,
-    "x": 0,
-    "y": 29
-   },
-   "targets": [
-    {
-     "datasource": {
-      "type": "influxdb",
-      "uid": "influx"
-     },
-     "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"cam-sala-twin\" and (r._field == \"motion\" or r._field == \"brightness\" or r._field == \"fps\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {
-     "unit": "",
-     "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
-      "spanNulls": true,
-      "showPoints": "never"
-     }
-    },
-    "overrides": []
-   },
-   "options": {
-    "legend": {
-     "displayMode": "list",
-     "placement": "bottom"
-    },
-    "tooltip": {
-     "mode": "multi"
-    }
-   }
-  },
-  {
-   "type": "timeseries",
-   "title": "Termostato: temperatura por habitacion",
-   "description": "",
+   "description": "Gemelo digital de una segunda camara: movimiento 0-100, brillo 0-255 y cuadros por segundo.",
    "id": 18,
    "datasource": {
     "type": "influxdb",
@@ -817,6 +1320,122 @@
    "gridPos": {
     "h": 7,
     "w": 8,
+    "x": 0,
+    "y": 29
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influx"
+     },
+     "refId": "A",
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"cam-sala-twin\" and (r._field == \"motion\" or r._field == \"brightness\" or r._field == \"fps\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
+      "spanNulls": true,
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "motion"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Movimiento"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "brightness"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Brillo"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "yellow"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "fps"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "FPS"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#5ad1e6"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    }
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Termostato: temperatura por habitacion",
+   "description": "Temperatura de cada habitacion y consigna del termostato. Regla temperatura_alta: sala > 28 C.",
+   "id": 19,
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influx"
+   },
+   "gridPos": {
+    "h": 7,
+    "w": 8,
     "x": 8,
     "y": 29
    },
@@ -827,36 +1446,139 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"termostato-twin\" and (r._field == \"temp_sala\" or r._field == \"temp_cuarto\" or r._field == \"temp_cocina\" or r._field == \"setpoint\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"termostato-twin\" and (r._field == \"temp_sala\" or r._field == \"temp_cuarto\" or r._field == \"temp_cocina\" or r._field == \"setpoint\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "celsius",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 18
+       },
+       {
+        "color": "red",
+        "value": 28
+       }
+      ]
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "temp_sala"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Sala"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "temp_cuarto"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Cuarto"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "purple"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "temp_cocina"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Cocina"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "setpoint"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Consigna"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#8e8e8e"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": []
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Termostato: humedad por habitacion",
-   "description": "",
-   "id": 19,
+   "description": "Humedad relativa por habitacion (35-85 %).",
+   "id": 20,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -874,36 +1596,107 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"termostato-twin\" and (r._field == \"hum_sala\" or r._field == \"hum_cuarto\" or r._field == \"hum_cocina\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"termostato-twin\" and (r._field == \"hum_sala\" or r._field == \"hum_cuarto\" or r._field == \"hum_cocina\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
-     "unit": "percent",
+     "unit": "humidity",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
-     }
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "min": 0,
+     "max": 100
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "hum_sala"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Sala"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "hum_cuarto"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Cuarto"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "purple"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "hum_cocina"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Cocina"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Enchufe: potencia",
-   "description": "",
-   "id": 20,
+   "description": "Consumo instantaneo del enchufe inteligente. Sube cuando la camara detecta presencia. Regla consumo_alto: > 300 W.",
+   "id": 21,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -921,36 +1714,80 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"enchufe-twin\" and (r._field == \"power_w\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"enchufe-twin\" and (r._field == \"power_w\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "watt",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 300
+       }
+      ]
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "power_w"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Potencia"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "yellow"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Enchufe: energia acumulada",
-   "description": "",
-   "id": 21,
+   "description": "Energia acumulada por el enchufe desde que arranco el gemelo.",
+   "id": 22,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -968,36 +1805,68 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"enchufe-twin\" and (r._field == \"energy_kwh\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"enchufe-twin\" and (r._field == \"energy_kwh\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "kwatth",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
-     }
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "decimals": 3
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "energy_kwh"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Energia"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "green"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Enchufe: voltaje y corriente",
-   "description": "",
-   "id": 22,
+   "description": "Voltaje de la red (~120 V) y corriente consumida (eje derecho).",
+   "id": 23,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1015,36 +1884,94 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"enchufe-twin\" and (r._field == \"voltage_v\" or r._field == \"current_a\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"enchufe-twin\" and (r._field == \"voltage_v\" or r._field == \"current_a\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "voltage_v"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Voltaje"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "blue"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "volt"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "current_a"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Corriente"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "amp"
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Puerta, ventana y PIR",
-   "description": "",
-   "id": 23,
+   "description": "Sensores binarios (1 = activo). Reglas: puerta_abierta_larga (> 10 min) y movimiento_sospechoso (puerta abierta sin presencia).",
+   "id": 24,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1062,39 +1989,109 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"puerta-twin\" and (r._field == \"door_open\" or r._field == \"window_open\" or r._field == \"pir\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"puerta-twin\" and (r._field == \"door_open\" or r._field == \"window_open\" or r._field == \"pir\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
       "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      },
       "lineInterpolation": "stepAfter"
      },
+     "color": {
+      "mode": "palette-classic"
+     },
      "min": 0,
-     "max": 1
+     "max": 1,
+     "decimals": 0
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "door_open"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Puerta abierta"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "window_open"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Ventana abierta"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "blue"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "pir"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "PIR (presencia)"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "green"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Luz inteligente",
-   "description": "",
-   "id": 24,
+   "description": "Estado, intensidad, iluminacion ambiente y consumo de la luz. En modo auto se enciende cuando hay presencia.",
+   "id": 25,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1112,35 +2109,137 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"luz-twin\" and (r._field == \"on\" or r._field == \"brightness_pct\" or r._field == \"lux_ambient\" or r._field == \"power_w\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"luz-twin\" and (r._field == \"on\" or r._field == \"brightness_pct\" or r._field == \"lux_ambient\" or r._field == \"power_w\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "on"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Encendida"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "yellow"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "none"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "brightness_pct"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Intensidad"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "percent"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "lux_ambient"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Luz ambiente"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#5ad1e6"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "lux"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "power_w"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Potencia"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "watt"
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": []
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "row",
    "title": "APIs (HTTP REST): Azure Maps Weather y Open-Meteo",
-   "id": 25,
+   "id": 26,
    "collapsed": false,
    "gridPos": {
     "h": 1,
@@ -1153,54 +2252,7 @@
   {
    "type": "timeseries",
    "title": "Azure Maps: temperatura exterior",
-   "description": "",
-   "id": 26,
-   "datasource": {
-    "type": "influxdb",
-    "uid": "influx"
-   },
-   "gridPos": {
-    "h": 7,
-    "w": 8,
-    "x": 0,
-    "y": 51
-   },
-   "targets": [
-    {
-     "datasource": {
-      "type": "influxdb",
-      "uid": "influx"
-     },
-     "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"api-azure-weather\" and (r._field == \"temperature\" or r._field == \"real_feel\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {
-     "unit": "celsius",
-     "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
-      "spanNulls": true,
-      "showPoints": "never"
-     }
-    },
-    "overrides": []
-   },
-   "options": {
-    "legend": {
-     "displayMode": "list",
-     "placement": "bottom"
-    },
-    "tooltip": {
-     "mode": "multi"
-    }
-   }
-  },
-  {
-   "type": "timeseries",
-   "title": "Azure Maps: humedad y nubes",
-   "description": "",
+   "description": "Condiciones actuales de Azure Maps Weather (consulta cada 5 min). Si la API falla, el bridge reenvia el ultimo valor bueno con stale=1 y age_s; si falta AZURE_MAPS_KEY el panel queda vacio y se registra api_error (api_recuperada cuando vuelve).",
    "id": 27,
    "datasource": {
     "type": "influxdb",
@@ -1209,6 +2261,103 @@
    "gridPos": {
     "h": 7,
     "w": 8,
+    "x": 0,
+    "y": 51
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influx"
+     },
+     "refId": "A",
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"api-azure-weather\" and (r._field == \"temperature\" or r._field == \"real_feel\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "celsius",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
+      "spanNulls": true,
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "temperature"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Temperatura"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "real_feel"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Sensacion termica"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    }
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Azure Maps: humedad y nubes",
+   "description": "Humedad relativa y porcentaje de cielo cubierto.",
+   "id": 28,
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influx"
+   },
+   "gridPos": {
+    "h": 7,
+    "w": 8,
     "x": 8,
     "y": 51
    },
@@ -1219,36 +2368,88 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"api-azure-weather\" and (r._field == \"humidity\" or r._field == \"cloud_cover\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"api-azure-weather\" and (r._field == \"humidity\" or r._field == \"cloud_cover\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "percent",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
-     }
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "min": 0,
+     "max": 100
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "humidity"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Humedad"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "blue"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "cloud_cover"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Nubosidad"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#8e8e8e"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Azure Maps: viento y UV",
-   "description": "",
-   "id": 28,
+   "description": "Velocidad del viento y rafagas (km/h) e indice UV (eje derecho).",
+   "id": 29,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1266,36 +2467,117 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"api-azure-weather\" and (r._field == \"wind_kmh\" or r._field == \"gust_kmh\" or r._field == \"uv_index\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"api-azure-weather\" and (r._field == \"wind_kmh\" or r._field == \"gust_kmh\" or r._field == \"uv_index\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "wind_kmh"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Viento"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#5ad1e6"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "velocitykmh"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "gust_kmh"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Rafagas"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "blue"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "velocitykmh"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "uv_index"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Indice UV"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "purple"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "none"
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Calidad del aire: PM2.5 y PM10",
-   "description": "",
-   "id": 29,
+   "description": "Material particulado de Open-Meteo Air Quality (ug/m3). Referencia PM2.5: > 35 insalubre para grupos sensibles.",
+   "id": 30,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1313,36 +2595,103 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"api-openmeteo-aq\" and (r._field == \"pm2_5\" or r._field == \"pm10\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"api-openmeteo-aq\" and (r._field == \"pm2_5\" or r._field == \"pm10\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "conμgm3",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 35
+       },
+       {
+        "color": "red",
+        "value": 55
+       }
+      ]
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "pm2_5"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "PM2.5"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "pm10"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "PM10"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "purple"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Calidad del aire: indice AQI (US)",
-   "description": "",
-   "id": 30,
+   "description": "Indice de calidad del aire de EE. UU.: 0-50 bueno, 51-100 moderado, 101-150 insalubre para sensibles, > 150 insalubre. Regla aire_exterior_malo: > 100.",
+   "id": 31,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1360,36 +2709,89 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"api-openmeteo-aq\" and (r._field == \"us_aqi\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"api-openmeteo-aq\" and (r._field == \"us_aqi\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
-     }
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "yellow",
+        "value": 51
+       },
+       {
+        "color": "orange",
+        "value": 101
+       },
+       {
+        "color": "red",
+        "value": 151
+       }
+      ]
+     },
+     "decimals": 0
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "us_aqi"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "AQI"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Gases: CO y NO2",
-   "description": "",
-   "id": 31,
+   "description": "Monoxido de carbono y dioxido de nitrogeno a nivel del suelo (ug/m3).",
+   "id": 32,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1407,35 +2809,85 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"api-openmeteo-aq\" and (r._field == \"co_ugm3\" or r._field == \"no2_ugm3\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"api-openmeteo-aq\" and (r._field == \"co_ugm3\" or r._field == \"no2_ugm3\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
-     "unit": "",
+     "unit": "conμgm3",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "co_ugm3"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "CO"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#8e8e8e"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "no2_ugm3"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "NO2"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "row",
    "title": "Datasets reales reproducidos (UCI): energia del hogar y deteccion de ocupacion",
-   "id": 32,
+   "id": 33,
    "collapsed": false,
    "gridPos": {
     "h": 1,
@@ -1448,54 +2900,7 @@
   {
    "type": "timeseries",
    "title": "Energia: electrodomesticos y luces",
-   "description": "",
-   "id": 33,
-   "datasource": {
-    "type": "influxdb",
-    "uid": "influx"
-   },
-   "gridPos": {
-    "h": 7,
-    "w": 8,
-    "x": 0,
-    "y": 66
-   },
-   "targets": [
-    {
-     "datasource": {
-      "type": "influxdb",
-      "uid": "influx"
-     },
-     "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"ds-energia\" and (r._field == \"appliances_wh\" or r._field == \"lights_wh\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
-    }
-   ],
-   "fieldConfig": {
-    "defaults": {
-     "unit": "watth",
-     "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
-      "spanNulls": true,
-      "showPoints": "never"
-     }
-    },
-    "overrides": []
-   },
-   "options": {
-    "legend": {
-     "displayMode": "list",
-     "placement": "bottom"
-    },
-    "tooltip": {
-     "mode": "multi"
-    }
-   }
-  },
-  {
-   "type": "timeseries",
-   "title": "Energia: temperatura cocina, sala y exterior",
-   "description": "",
+   "description": "UCI Appliances Energy Prediction (Candanedo, 2017), reproducido fila a fila cada 15 s.",
    "id": 34,
    "datasource": {
     "type": "influxdb",
@@ -1504,6 +2909,103 @@
    "gridPos": {
     "h": 7,
     "w": 8,
+    "x": 0,
+    "y": 66
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "influxdb",
+      "uid": "influx"
+     },
+     "refId": "A",
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"ds-energia\" and (r._field == \"appliances_wh\" or r._field == \"lights_wh\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "watth",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
+      "spanNulls": true,
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "appliances_wh"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Electrodomesticos"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "yellow"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "lights_wh"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Luces"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    }
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Energia: temperatura cocina, sala y exterior",
+   "description": "Temperaturas del mismo dataset de energia.",
+   "id": 35,
+   "datasource": {
+    "type": "influxdb",
+    "uid": "influx"
+   },
+   "gridPos": {
+    "h": 7,
+    "w": 8,
     "x": 8,
     "y": 66
    },
@@ -1514,36 +3016,105 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"ds-energia\" and (r._field == \"t_cocina\" or r._field == \"t_sala\" or r._field == \"t_exterior\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"ds-energia\" and (r._field == \"t_cocina\" or r._field == \"t_sala\" or r._field == \"t_exterior\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "celsius",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "t_cocina"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Cocina"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "t_sala"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Sala"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "t_exterior"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Exterior"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "blue"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Energia: humedad y viento",
-   "description": "",
-   "id": 35,
+   "description": "Humedad relativa interior (%) y velocidad del viento exterior (m/s, eje derecho).",
+   "id": 36,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1561,36 +3132,117 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"ds-energia\" and (r._field == \"rh_cocina\" or r._field == \"rh_sala\" or r._field == \"viento\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"ds-energia\" and (r._field == \"rh_cocina\" or r._field == \"rh_sala\" or r._field == \"viento\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "rh_cocina"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Humedad cocina"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "humidity"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "rh_sala"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Humedad sala"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "orange"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "humidity"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "viento"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Viento"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#5ad1e6"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "velocityms"
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "CO2 interior",
-   "description": "",
-   "id": 36,
+   "description": "UCI Occupancy Detection (Candanedo y Feldheim, 2016). Regla co2_alto: > 1000 ppm warning, > 1500 ppm critica.",
+   "id": 37,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1608,36 +3260,84 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"ds-co2\" and (r._field == \"co2\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"ds-co2\" and (r._field == \"co2\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "ppm",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 1000
+       },
+       {
+        "color": "red",
+        "value": 1500
+       }
+      ]
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "co2"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "CO2"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "purple"
+        }
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Luz y temperatura (CO2)",
-   "description": "",
-   "id": 37,
+   "description": "Iluminacion (lux) y temperatura del dataset de ocupacion/CO2.",
+   "id": 38,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1655,36 +3355,94 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"ds-co2\" and (r._field == \"luz\" or r._field == \"temperatura\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"ds-co2\" and (r._field == \"luz\" or r._field == \"temperatura\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
-      "showPoints": "never"
+      "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      }
+     },
+     "color": {
+      "mode": "palette-classic"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "luz"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Luz"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "yellow"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "lux"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "temperatura"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Temperatura"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "red"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "celsius"
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "timeseries",
    "title": "Ocupacion detectada",
-   "description": "",
-   "id": 38,
+   "description": "Ocupacion real etiquetada (1 = ocupado) y la luz medida en ese momento (eje derecho).",
+   "id": 39,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1702,36 +3460,94 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"ds-ocupacion\" and (r._field == \"ocupado\" or r._field == \"luz\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device == \"ds-ocupacion\" and (r._field == \"ocupado\" or r._field == \"luz\"))\n  |> aggregateWindow(every: ${ventana}, fn: ${agg}, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "",
      "custom": {
-      "lineWidth": 1,
-      "fillOpacity": 12,
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "gradientMode": "opacity",
       "spanNulls": true,
       "showPoints": "never",
+      "thresholdsStyle": {
+       "mode": "off"
+      },
       "lineInterpolation": "stepAfter"
+     },
+     "color": {
+      "mode": "palette-classic"
      }
     },
-    "overrides": []
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "ocupado"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Ocupado"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "green"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "none"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "luz"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "Luz"
+       },
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "yellow"
+        }
+       },
+       {
+        "id": "unit",
+        "value": "lux"
+       }
+      ]
+     }
+    ]
    },
    "options": {
     "legend": {
      "displayMode": "list",
-     "placement": "bottom"
+     "placement": "bottom",
+     "calcs": [
+      "lastNotNull"
+     ]
     },
     "tooltip": {
-     "mode": "multi"
+     "mode": "multi",
+     "sort": "none"
     }
    }
   },
   {
    "type": "row",
    "title": "Estadisticas (promedio, maximo y minimo en el rango elegido) y alertas",
-   "id": 39,
+   "id": 40,
    "collapsed": false,
    "gridPos": {
     "h": 1,
@@ -1742,10 +3558,25 @@
    "panels": []
   },
   {
+   "transformations": [
+    {
+     "id": "organize",
+     "options": {
+      "indexByName": {
+       "dispositivo": 0,
+       "variable": 1,
+       "promedio": 2,
+       "maximo": 3,
+       "minimo": 4,
+       "muestras": 5
+      }
+     }
+    }
+   ],
    "type": "table",
    "title": "Estadisticas por dispositivo y variable (usa el filtro Dispositivo y el selector de tiempo)",
-   "description": "",
-   "id": 40,
+   "description": "Promedio, maximo, minimo y numero de muestras de cada variable en el rango de tiempo elegido. Filtra con la variable Dispositivo.",
+   "id": 41,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1763,22 +3594,67 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "data = from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device =~ /^${device:regex}$/)\n  |> filter(fn: (r) => r._field != \"sim\" and r._field != \"replay\" and r._field != \"row\")\n  |> toFloat()\nunion(tables: [\n  data |> mean() |> set(key: \"stat\", value: \"promedio\"),\n  data |> max() |> set(key: \"stat\", value: \"maximo\"),\n  data |> min() |> set(key: \"stat\", value: \"minimo\"),\n  data |> count() |> toFloat() |> set(key: \"stat\", value: \"muestras\")\n])\n  |> group()\n  |> pivot(rowKey: [\"device\", \"_field\"], columnKey: [\"stat\"], valueColumn: \"_value\")\n  |> sort(columns: [\"device\", \"_field\"])"
+     "query": "data = from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"iot\" and r.device =~ /^${device:regex}$/)\n  |> filter(fn: (r) => r._field != \"sim\" and r._field != \"replay\" and r._field != \"row\" and r._field != \"stale\" and r._field != \"age_s\")\n  |> toFloat()\nunion(tables: [\n  data |> mean() |> set(key: \"stat\", value: \"promedio\"),\n  data |> max() |> set(key: \"stat\", value: \"maximo\"),\n  data |> min() |> set(key: \"stat\", value: \"minimo\"),\n  data |> count() |> toFloat() |> set(key: \"stat\", value: \"muestras\")\n])\n  |> group()\n  |> pivot(rowKey: [\"device\", \"_field\"], columnKey: [\"stat\"], valueColumn: \"_value\")\n  |> rename(columns: {_field: \"variable\", device: \"dispositivo\"})\n  |> keep(columns: [\"dispositivo\", \"variable\", \"promedio\", \"maximo\", \"minimo\", \"muestras\"])\n  |> sort(columns: [\"dispositivo\", \"variable\"])"
     }
    ],
    "fieldConfig": {
-    "defaults": {},
-    "overrides": []
+    "defaults": {
+     "custom": {
+      "filterable": true
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byRegexp",
+       "options": "promedio|maximo|minimo"
+      },
+      "properties": [
+       {
+        "id": "decimals",
+        "value": 2
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "muestras"
+      },
+      "properties": [
+       {
+        "id": "decimals",
+        "value": 0
+       }
+      ]
+     }
+    ]
    },
    "options": {
-    "showHeader": true
+    "showHeader": true,
+    "cellHeight": "sm"
    }
   },
   {
+   "transformations": [
+    {
+     "id": "organize",
+     "options": {
+      "indexByName": {
+       "_time": 0,
+       "severity": 1,
+       "rule": 2,
+       "device": 3,
+       "value": 4,
+       "msg": 5
+      }
+     }
+    }
+   ],
    "type": "table",
    "title": "Alertas y eventos (reglas del servidor)",
-   "description": "Reglas: distraido_prolongado, ausente_largo, co2_alto, temperatura_alta, consumo_alto, puerta_abierta_larga, movimiento_sospechoso, aire_exterior_malo, api_error, fuente_datos",
-   "id": 41,
+   "description": "Ultimas 100 alertas. Reglas: distraido_prolongado, ausente_largo, co2_alto, temperatura_alta, consumo_alto, puerta_abierta_larga, movimiento_sospechoso, aire_exterior_malo, api_error, api_recuperada, fuente_datos, logro",
+   "id": 42,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1796,21 +3672,79 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\")\n  |> pivot(rowKey: [\"_time\", \"rule\", \"severity\", \"device\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 100)"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\")\n  |> pivot(rowKey: [\"_time\", \"rule\", \"severity\", \"device\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> drop(fn: (column) => column == \"_start\" or column == \"_stop\" or column == \"_measurement\" or column == \"topic\" or column == \"ts\")\n  |> group()\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 100)"
     }
    ],
    "fieldConfig": {
-    "defaults": {},
-    "overrides": []
+    "defaults": {
+     "custom": {
+      "filterable": true
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "severity"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "critical": {
+            "text": "critica",
+            "color": "red",
+            "index": 0
+           },
+           "warning": {
+            "text": "warning",
+            "color": "orange",
+            "index": 1
+           },
+           "info": {
+            "text": "info",
+            "color": "blue",
+            "index": 2
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "_time"
+      },
+      "properties": [
+       {
+        "id": "displayName",
+        "value": "hora"
+       }
+      ]
+     }
+    ]
    },
    "options": {
-    "showHeader": true
+    "showHeader": true,
+    "cellHeight": "sm"
    }
   },
   {
    "type": "barchart",
    "title": "Alertas por regla",
-   "id": 42,
+   "description": "Cuantas veces se disparo cada regla en el rango elegido.",
+   "id": 43,
    "datasource": {
     "type": "influxdb",
     "uid": "influx"
@@ -1828,27 +3762,45 @@
       "uid": "influx"
      },
      "refId": "A",
-     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\" and r._field == \"value\")\n  |> group(columns: [\"rule\"])\n  |> count()\n  |> group()"
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\" and r._field == \"value\")\n  |> group(columns: [\"rule\"])\n  |> count()\n  |> group()\n  |> keep(columns: [\"rule\", \"_value\"])\n  |> rename(columns: {_value: \"alertas\"})\n  |> sort(columns: [\"alertas\"], desc: true)"
     }
    ],
    "fieldConfig": {
-    "defaults": {},
+    "defaults": {
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "orange"
+     },
+     "decimals": 0
+    },
     "overrides": []
    },
    "options": {
     "xField": "rule",
     "orientation": "horizontal",
+    "showValue": "auto",
     "legend": {
      "showLegend": false
     }
    }
   }
  ],
+ "liveNow": false,
+ "timepicker": {
+  "refresh_intervals": [
+   "10s",
+   "30s",
+   "1m",
+   "5m",
+   "15m"
+  ]
+ },
  "templating": {
   "list": [
    {
     "name": "ventana",
     "label": "Ventana de agregacion",
+    "description": "Tamano de la ventana con la que se agregan las series",
     "type": "custom",
     "query": "10s,30s,1m,5m,15m,1h",
     "current": {
@@ -1892,6 +3844,7 @@
    {
     "name": "agg",
     "label": "Funcion",
+    "description": "Funcion de agregacion de cada ventana",
     "type": "custom",
     "query": "mean,max,min,last",
     "current": {
@@ -1925,6 +3878,7 @@
    {
     "name": "device",
     "label": "Dispositivo",
+    "description": "Filtra la tabla de estadisticas",
     "type": "query",
     "datasource": {
      "type": "influxdb",
@@ -1935,6 +3889,7 @@
     "allValue": ".*",
     "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"iot\", tag: \"device\")",
     "refresh": 2,
+    "sort": 1,
     "current": {
      "text": "All",
      "value": "$__all"
@@ -1944,7 +3899,34 @@
   ]
  },
  "annotations": {
-  "list": []
+  "list": [
+   {
+    "builtIn": 1,
+    "datasource": {
+     "type": "grafana",
+     "uid": "-- Grafana --"
+    },
+    "enable": true,
+    "hide": true,
+    "iconColor": "rgba(0, 211, 255, 1)",
+    "name": "Annotations & Alerts",
+    "type": "dashboard"
+   },
+   {
+    "datasource": {
+     "type": "influxdb",
+     "uid": "influx"
+    },
+    "enable": true,
+    "hide": false,
+    "iconColor": "orange",
+    "name": "Alertas del jefe",
+    "target": {
+     "refId": "Anno",
+     "query": "from(bucket: \"iot\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"alerts\" and r._field == \"msg\")\n  |> map(fn: (r) => ({_time: r._time, text: r.severity + \" | \" + r.rule + \": \" + r._value, tags: r.device}))"
+    }
+   }
+  ]
  },
  "links": []
 }

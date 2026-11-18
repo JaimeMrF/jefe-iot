@@ -1,10 +1,27 @@
 # El dominio sale de .env (DOMAIN). Cambiar de VPS o de dominio = cambiar DNS y .env, sin tocar codigo.
+
+# Cabeceras de seguridad comunes a todos los sitios
+(seguridad) {
+	header {
+		# Solo HTTPS durante 1 ano (sin includeSubDomains/preload para no comprometer otros subdominios)
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		# No revelar la version del servidor
+		-Server
+	}
+}
+
 # Panel 3D (estatico) + WebSocket MQTT + configuracion para el panel
 {$DOMAIN} {
-	encode gzip
-	header Permissions-Policy "bluetooth=(self)"
-	header Cache-Control "no-cache"
-	header X-Content-Type-Options nosniff
+	import seguridad
+	encode zstd gzip
+	header {
+		# Web Bluetooth y camara solo para este sitio; nada de microfono, geolocalizacion, etc.
+		Permissions-Policy "bluetooth=(self), camera=(self), microphone=(self), geolocation=()"
+		X-Frame-Options DENY
+		Cache-Control "no-cache"
+	}
 
 	handle_path /mqtt* {
 		reverse_proxy mosquitto:9001
@@ -20,11 +37,13 @@
 }
 
 grafana.{$DOMAIN} {
-	encode gzip
+	import seguridad
+	encode zstd gzip
 	reverse_proxy grafana:3000
 }
 
 # Solo existe para que Caddy obtenga el certificado que usa Mosquitto (llega por el 443 via SNI)
 mqtt.{$DOMAIN} {
+	import seguridad
 	respond "mqtt ok" 200
 }

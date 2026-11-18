@@ -24,6 +24,7 @@ flowchart LR
   API1["Azure Maps Weather<br/>(HTTP REST)"]
   API2["Open-Meteo Air Quality<br/>(HTTP REST)"]
   DS["Datasets UCI (CSV)"]
+  TGM["Telegram Bot API<br/>(opcional)"]
   CAM -- "MQTT/TLS :443" --> EDGE
   PANEL -- "HTTPS / WSS" --> EDGE
   PANEL -. "BLE: WiFi y credenciales" .-> CAM
@@ -35,6 +36,7 @@ flowchart LR
   API1 --> BR
   API2 --> BR
   DS --> BR
+  BR -. "alertas y reportes" .-> TGM
   MQ --> TG --> DB --> GF
 ```
 
@@ -46,7 +48,7 @@ flowchart LR
 | **Datos y variables** | Telemetría JSON numérica por dispositivo, 3 a 11 variables cada uno |
 | **Protocolos** | MQTT 3.1.1 sobre TLS (placa), MQTT sobre WebSocket seguro (panel), HTTP REST (APIs y snapshot), BLE GATT (aprovisionamiento) |
 | **Plataforma** | Mosquitto (bróker) + bridge (endpoints lógicos) + Telegraf → InfluxDB |
-| **Visualización** | Grafana (36 paneles) y panel 3D en three.js |
+| **Visualización** | Grafana (37 paneles, alertas como anotaciones) y panel 3D en three.js |
 | **Retroceso** | Cada dispositivo acepta `jefe/<id>/cmd`: apagar, ajustar intervalo, calibrar, accionar |
 | **Nube / URL propia** | VPS propio, Docker Compose, HTTPS automático (Let's Encrypt), CI/CD con GitHub Actions |
 
@@ -65,7 +67,7 @@ flowchart LR
 | 9 | `ds-energia` | **Dataset** (UCI Appliances Energy) | CSV → MQTT | appliances_wh, lights_wh, t_cocina, t_sala, t_exterior, rh_*, viento |
 | 10 | `ds-co2` | **Dataset** (UCI Occupancy Detection) | CSV → MQTT | co2 ppm, luz lux, temperatura, humedad, razon_humedad |
 | 11 | `ds-ocupacion` | **Dataset** (UCI Occupancy Detection) | CSV → MQTT | ocupado 0/1, luz, temperatura, humedad |
-| (derivado) | `boss` | Calculado en el servidor | MQTT | score 0-100, state 1/2/3, motion_avg, focused/distracted/absent_min, focus_pct |
+| (derivado) | `boss` | Calculado en el servidor | MQTT | score 0-100, state 1/2/3, state_s, motion_avg, focused/distracted/absent_min, focus_pct, xp, level |
 
 Los gemelos digitales **reaccionan a la presencia real**: si la cámara detecta movimiento, el enchufe sube su consumo,
 la luz se enciende en auto y el PIR se activa.
@@ -85,9 +87,16 @@ y se registra el evento `fuente_datos`. No se rellena el pasado: el histórico s
 | `jefe/<id>/status` | LWT (retenido) | `online` / `offline` |
 | `jefe/<id>/event` | bridge → Influx | alertas `{rule, severity, device, value, msg}` |
 | `jefe/esp32cam-01/snap` / `live` | placa → panel | JPEG por MQTT y movimiento en vivo, solo mientras alguien mira |
+| `jefe/boss/cmd` | panel → bridge | `{"reset":true}`, `{"personality":"estricto"\|"motivador"\|"sarcastico"}` |
+| `jefe/boss/state` · `stats` · `report` | bridge → panel (retenidos) | personalidad; xp, nivel, rachas y logros; reporte del día y de la semana (ver [CONTRATO-V2.md](CONTRATO-V2.md)) |
 
-Seguridad: usuarios `esp32`, `panel` y `backend` con ACL distintas; TLS en el 443 con certificado de Let's Encrypt;
-la cámara solo transmite mientras un panel autenticado la pide.
+La placa acepta además en `cmd`: `interval_s` y `noise` (0-40, firmware 2.1.0). Las APIs pueden publicar `stale=1` y `age_s`
+cuando el bridge reenvía el último valor bueno porque la API falló; cada evento lleva `ts` e `id`.
+
+Seguridad: usuarios `esp32`, `panel` y `backend` con ACL distintas (`mosquitto/acl`): la placa solo puede escribir en
+`jefe/esp32cam-01/...` y leer su `cmd` (no puede suplantar a otros dispositivos); el panel lee todo y solo escribe `jefe/+/cmd`;
+`backend` (bridge y Telegraf) lee y escribe `jefe/#`. TLS en el 443 con certificado de Let's Encrypt; la cámara solo transmite
+mientras un panel autenticado la pide.
 
 ## Procesamiento y reglas (servidor)
 
@@ -99,15 +108,22 @@ la cámara solo transmite mientras un panel autenticado la pide.
 | `temperatura_alta` | sala > 28 °C | warning |
 | `consumo_alto` | enchufe > 300 W | info |
 | `puerta_abierta_larga` | puerta abierta > 10 min | warning |
-| `movimiento_sospechoso` | puerta abierta sin presencia | critical |
+| `movimiento_sospechoso` | puerta abierta sin presencia (cámara ausente y PIR = 0) | critical |
 | `aire_exterior_malo` | AQI > 100 | warning |
-| `api_error` / `fuente_datos` | falla de API / cambio real↔simulado | warning / info |
+| `api_error` / `api_recuperada` | falla de una API / la API vuelve a responder | warning / info |
+| `fuente_datos` | cambio real ↔ simulado | info |
+| `logro` | se desbloquea un logro de gamificación | info |
 
 Grafana permite ajustar la **ventana de agregación** (10 s a 1 h) y la **función** (promedio, máximo, mínimo, último),
 y la tabla de **estadísticas** calcula promedio, máximo, mínimo y número de muestras por variable en el rango elegido.
+Cada alerta aparece también como **anotación** (marca vertical) en todas las gráficas de tiempo. El dashboard se genera con
+`python tools/gen_dashboard.py` (no se edita el JSON a mano) y se verifica con `python tools/check_dashboard.py`.
+
+Las alertas con severidad ≥ `TELEGRAM_MIN_SEVERITY`, los logros y los reportes diario/semanal pueden llegar por **Telegram**
+(opcional, ver [DEPLOY.md](DEPLOY.md#7-telegram-opcional)).
 
 ## Tecnologías
-ESP32-CAM (Arduino/PlatformIO, NimBLE) · Mosquitto 2 · nginx (stream SNI) · Caddy 2 · Telegraf · InfluxDB 2 · Grafana 11 ·
+ESP32-CAM (Arduino/PlatformIO, NimBLE) · Mosquitto 2.0.20 · nginx 1.30 (stream SNI) · Caddy 2.11 · Telegraf 1.32 · InfluxDB 2.7 · Grafana 11.3 ·
 Node.js 22 (bridge, mqtt.js) · three.js r170 · Web Bluetooth · Docker Compose · GitHub Actions · Let's Encrypt.
 
 ## Referencias
